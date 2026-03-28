@@ -14,6 +14,11 @@
 #include <vector>
 #include <cstring>
 #include <chrono>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#include "lz4/lz4.h"
 
 // -----------------------------
 // Globale Variablen
@@ -28,14 +33,52 @@ static GLuint g_pbo[2] = {0, 0};
 static int g_pboIndex = 0;
 static bool g_pboInitialized = false;
 
-std::mutex g_frameMutex;
-std::queue<std::vector<unsigned char>> g_frameQueue;
+static std::mutex g_frameMutex;
+static std::queue<std::vector<unsigned char>> g_frameQueue;
 
-std::atomic<bool> g_running{false};
-std::thread g_networkThread;
+static std::atomic<bool> g_running{false};
+static std::thread g_networkThread;
+
+static int g_sock = -1;
+static sockaddr_in g_destAddr;
+
+static uint32_t g_frameCounter = 0;
 
 // -----------------------------
-// Hilfsfunktionen
+// UDP initialisieren / Cleanup
+// -----------------------------
+
+static void initUDP(const char* ip, uint16_t port)
+{
+#ifdef _WIN32
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2,2), &wsa);
+#endif
+
+    g_sock = (int)socket(AF_INET, SOCK_DGRAM, 0);
+
+    memset(&g_destAddr, 0, sizeof(g_destAddr));
+    g_destAddr.sin_family = AF_INET;
+    g_destAddr.sin_port   = htons(port);
+    g_destAddr.sin_addr.s_addr = inet_addr(ip);
+}
+
+static void closeUDP()
+{
+    if (g_sock >= 0) {
+#ifdef _WIN32
+        closesocket(g_sock);
+        WSACleanup();
+#else
+        close(g_sock);
+#endif
+        g_sock = -1;
+    }
+}
+
+
+// -----------------------------
+// PBO initialisieren
 // -----------------------------
 
 static void initPBOs(int width, int height)
@@ -53,6 +96,10 @@ static void initPBOs(int width, int height)
     g_pboInitialized = true;
 }
 
+// ------------------------------------------------------------
+// Frame in Queue legen
+// ------------------------------------------------------------
+
 static void enqueueFrame(const unsigned char* ptr, int width, int height)
 {
     const size_t size = static_cast<size_t>(width) * height * 4;
@@ -68,13 +115,86 @@ static void enqueueFrame(const unsigned char* ptr, int width, int height)
     }
 }
 
-// Placeholder: hier später JPEG/H.264 + UDP einbauen
+// ------------------------------------------------------------
+// LZ4 + UDP‑Streaming
+// ------------------------------------------------------------
+
+struct FrameHeader {
+    uint32_t magic;
+    uint32_t frameID;
+    uint16_t fragIndex;
+    uint16_t fragCount;
+    uint32_t payloadSize;
+    uint32_t width;
+    uint32_t height;
+    uint32_t rawSize;
+    uint32_t compressedSize;
+};
+
 static void sendFrame(const std::vector<unsigned char>& frame)
 {
-    // TODO: Komprimieren + Netzwerk senden
+    const int width  = g_width;
+    const int height = g_height;
+    const int rawSize = width * height * 4;
+
+    // LZ4 komprimieren
+    int maxCompressed = LZ4_compressBound(rawSize);
+    std::vector<char> compressed(maxCompressed);
+
+    int compressedSize = LZ4_compress_default(
+        (const char*)frame.data(),
+        compressed.data(),
+        rawSize,
+        maxCompressed
+    );
+
+    if (compressedSize <= 0)
+        return;
+
+    compressed.resize(compressedSize);
+
+    // Fragmentierung
+    const int MTU = 1300;  // sicher unter 1500
+    const int headerSize = sizeof(FrameHeader);
+    const int maxPayload = MTU - headerSize;
+
+    int fragCount = (compressedSize + maxPayload - 1) / maxPayload;
+
+    uint32_t frameID = g_frameCounter++;
+
+    for (int i = 0; i < fragCount; i++) {
+
+        int offset = i * maxPayload;
+        int chunkSize = std::min(maxPayload, compressedSize - offset);
+
+        FrameHeader hdr;
+        hdr.magic = 0xABCD1234;
+        hdr.frameID = frameID;
+        hdr.fragIndex = i;
+        hdr.fragCount = fragCount;
+        hdr.payloadSize = chunkSize;
+        hdr.width = width;
+        hdr.height = height;
+        hdr.rawSize = rawSize;
+        hdr.compressedSize = compressedSize;
+
+        // Paket bauen
+        std::vector<char> packet;
+        packet.resize(headerSize + chunkSize);
+
+        memcpy(packet.data(), &hdr, headerSize);
+        memcpy(packet.data() + headerSize, compressed.data() + offset, chunkSize);
+
+        // UDP senden
+        sendto(g_sock, packet.data(), packet.size(), 0,
+               (sockaddr*)&g_destAddr, sizeof(g_destAddr));
+    }
 }
 
-// Netzwerk‑Thread: holt Frames aus Queue und verschickt sie
+// ------------------------------------------------------------
+// Netzwerk‑Thread
+// ------------------------------------------------------------
+
 static void networkThreadLoop()
 {
     while (g_running.load()) {
@@ -97,7 +217,10 @@ static void networkThreadLoop()
     }
 }
 
-// Aktuell gebundene 2D‑Textur holen (Panel‑Textur im Gauges‑Pass)
+// ------------------------------------------------------------
+// Panel capturen
+// ------------------------------------------------------------
+
 static GLuint getCurrentBoundTexture2D()
 {
     GLint tex = 0;
@@ -186,6 +309,8 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     std::strcpy(outSig,  "de.codenuts.panelcast");
     std::strcpy(outDesc, "Streaming von 2D‑Cockpit‑Panels über Netzwerk.");
 
+    initUDP("127.0.0.1", 5000); // IP/Port anpassen
+    
     XPLMRegisterDrawCallback(
         drawCallback,
         xplm_Phase_Gauges,
@@ -212,10 +337,7 @@ PLUGIN_API void XPluginStop(void)
     if (g_networkThread.joinable())
         g_networkThread.join();
 
-    if (g_pboInitialized) {
-        glDeleteBuffers(2, g_pbo);
-        g_pboInitialized = false;
-    }
+    closeUDP();
 }
 
 PLUGIN_API int XPluginEnable(void)
