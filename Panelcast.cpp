@@ -55,6 +55,13 @@ static sockaddr_in g_destAddr;
 
 static uint32_t g_frameCounter = 0;
 
+static GLint g_tex = 0;
+
+// Functions
+int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void* in_refcon);
+XPLMCommandRef cmd_texid_inc = NULL;
+XPLMCommandRef cmd_texid_dec = NULL;
+
 // -----------------------------
 // UDP initialisieren / Cleanup
 // -----------------------------
@@ -234,9 +241,9 @@ static void networkThreadLoop()
 
 static GLuint getCurrentBoundTexture2D()
 {
-    GLint tex = 0;
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &tex);
-    return static_cast<GLuint>(tex);
+    //GLint tex = 0;
+    //glGetIntegerv(GL_TEXTURE_BINDING_2D, &tex);
+    return static_cast<GLuint>(g_tex);
 }
 
 // Panel‑Texturgröße automatisch ermitteln
@@ -327,6 +334,11 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
     std::strcpy(outSig,  "de.codenuts.panelcast");
     std::strcpy(outDesc, "Streaming von 2D‑Cockpit‑Panels über Netzwerk.");
 
+    cmd_texid_inc = XPLMCreateCommand("Panelcast/TEXTID_INC", "Panelcast Increase TexID");
+    cmd_texid_dec = XPLMCreateCommand("Panelcast/TEXTID_DEC", "Panelcast Decrease TexID");
+    XPLMRegisterCommandHandler(cmd_texid_inc, handle_command, 1, (void*)"Increase TexID");
+    XPLMRegisterCommandHandler(cmd_texid_dec, handle_command, 1, (void*)"Decrease TexID");
+
     initUDP("127.0.0.1", 5000); // IP/Port anpassen
     
     XPLMRegisterDrawCallback(
@@ -369,4 +381,28 @@ PLUGIN_API void XPluginDisable(void)
 
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inParam)
 {
+}
+
+int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void* in_refcon)
+{
+    // Only do the command when it is being released
+    if (phase == xplm_CommandEnd)
+    {
+        logger.log("Incoming command %p with reference [%s]\n", cmd_id, (char*)in_refcon);
+        if (cmd_id == cmd_texid_inc) {
+            g_tex++;
+            g_width = 0;
+            g_pboInitialized = false;
+            logger.log("TexID Increased: %d", g_tex);
+        } 
+        if (cmd_id == cmd_texid_dec) {
+            if (g_tex > 0) {
+                g_tex--;
+                g_width = 0;
+                g_pboInitialized = false;
+            }
+            logger.log("TexID Decreased: %d", g_tex);
+        }
+    }
+    return 1;
 }
