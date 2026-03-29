@@ -41,6 +41,7 @@ while True:
 
         img = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 4))
         img_bgr = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+        flipped = cv2.flip(img_bgr, 0)
 
-        cv2.imshow("Panelcast", img_bgr)
+        cv2.imshow("Panelcast", flipped)
         cv2.waitKey(1)
