@@ -1,4 +1,3 @@
-#include "Logger.h"
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -29,9 +28,6 @@
 #include <vector>
 #include <cstring>
 #include <chrono>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 #include "lz4/lz4.h"
 
