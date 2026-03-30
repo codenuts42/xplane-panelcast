@@ -7,12 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D0AC02572F77E816007B93F7 /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02522F77E816007B93F7 /* lz4.c */; };
-		D0AC02582F77E816007B93F7 /* lz4frame.c in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02542F77E816007B93F7 /* lz4frame.c */; };
-		D0AC02592F77E816007B93F7 /* lz4hc.c in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02562F77E816007B93F7 /* lz4hc.c */; };
-		D0AC025C2F77E970007B93F7 /* lz4.h in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02512F77E816007B93F7 /* lz4.h */; };
-		D0AC025D2F77E970007B93F7 /* lz4frame.h in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02532F77E816007B93F7 /* lz4frame.h */; };
-		D0AC025E2F77E970007B93F7 /* lz4hc.h in Sources */ = {isa = PBXBuildFile; fileRef = D0AC02552F77E816007B93F7 /* lz4hc.h */; };
+		D09AB5562F7A6366000562D4 /* lz4file.c in Sources */ = {isa = PBXBuildFile; fileRef = D09AB5522F7A6366000562D4 /* lz4file.c */; };
+		D09AB5572F7A6366000562D4 /* lz4hc.c in Sources */ = {isa = PBXBuildFile; fileRef = D09AB5542F7A6366000562D4 /* lz4hc.c */; };
+		D09AB5582F7A6366000562D4 /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = D09AB5512F7A6366000562D4 /* lz4.c */; };
+		D09AB5592F7A6366000562D4 /* lz4frame.c in Sources */ = {isa = PBXBuildFile; fileRef = D09AB5532F7A6366000562D4 /* lz4frame.c */; };
+		D09AB55A2F7A6366000562D4 /* xxhash.c in Sources */ = {isa = PBXBuildFile; fileRef = D09AB5552F7A6366000562D4 /* xxhash.c */; };
 		D67297EB0F9E0FCC00CFD1FA /* Panelcast.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D67297EA0F9E0FCC00CFD1FA /* Panelcast.cpp */; };
 		D6A7BDAA16A1DEA200D1426A /* OpenGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6A7BDA916A1DEA200D1426A /* OpenGL.framework */; };
 		D6A7BDC116A1DEC000D1426A /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D6A7BDC016A1DEC000D1426A /* CoreFoundation.framework */; };
@@ -22,13 +21,12 @@
 
 /* Begin PBXFileReference section */
 		D03E81882F74138300AD33E4 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		D09AB5512F7A6366000562D4 /* lz4.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = lz4.c; path = ../external/lz4/lz4.c; sourceTree = "<group>"; };
+		D09AB5522F7A6366000562D4 /* lz4file.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = lz4file.c; path = ../external/lz4/lz4file.c; sourceTree = "<group>"; };
+		D09AB5532F7A6366000562D4 /* lz4frame.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = lz4frame.c; path = ../external/lz4/lz4frame.c; sourceTree = "<group>"; };
+		D09AB5542F7A6366000562D4 /* lz4hc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = lz4hc.c; path = ../external/lz4/lz4hc.c; sourceTree = "<group>"; };
+		D09AB5552F7A6366000562D4 /* xxhash.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = xxhash.c; path = ../external/lz4/xxhash.c; sourceTree = "<group>"; };
 		D0AC02502F77DBE5007B93F7 /* panelcast_client.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = panelcast_client.py; sourceTree = "<group>"; };
-		D0AC02512F77E816007B93F7 /* lz4.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lz4.h; sourceTree = "<group>"; };
-		D0AC02522F77E816007B93F7 /* lz4.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lz4.c; sourceTree = "<group>"; };
-		D0AC02532F77E816007B93F7 /* lz4frame.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lz4frame.h; sourceTree = "<group>"; };
-		D0AC02542F77E816007B93F7 /* lz4frame.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lz4frame.c; sourceTree = "<group>"; };
-		D0AC02552F77E816007B93F7 /* lz4hc.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lz4hc.h; sourceTree = "<group>"; };
-		D0AC02562F77E816007B93F7 /* lz4hc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lz4hc.c; sourceTree = "<group>"; };
 		D0D422842F7315B200E6B488 /* Logger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Logger.h; sourceTree = "<group>"; };
 		D607B19909A556E400699BC3 /* Panelcast.xpl */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = Panelcast.xpl; sourceTree = BUILT_PRODUCTS_DIR; };
 		D67297EA0F9E0FCC00CFD1FA /* Panelcast.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Panelcast.cpp; sourceTree = "<group>"; };
@@ -64,15 +62,14 @@
 			name = Source;
 			sourceTree = "<group>";
 		};
-		D0AC025A2F77E822007B93F7 /* lz4 */ = {
+		D09AB55B2F7A636B000562D4 /* lz4 */ = {
 			isa = PBXGroup;
 			children = (
-				D0AC02512F77E816007B93F7 /* lz4.h */,
-				D0AC02522F77E816007B93F7 /* lz4.c */,
-				D0AC02532F77E816007B93F7 /* lz4frame.h */,
-				D0AC02542F77E816007B93F7 /* lz4frame.c */,
-				D0AC02552F77E816007B93F7 /* lz4hc.h */,
-				D0AC02562F77E816007B93F7 /* lz4hc.c */,
+				D09AB5512F7A6366000562D4 /* lz4.c */,
+				D09AB5522F7A6366000562D4 /* lz4file.c */,
+				D09AB5532F7A6366000562D4 /* lz4frame.c */,
+				D09AB5542F7A6366000562D4 /* lz4hc.c */,
+				D09AB5552F7A6366000562D4 /* xxhash.c */,
 			);
 			path = lz4;
 			sourceTree = "<group>";
@@ -80,7 +77,6 @@
 		D607B15F09A5563000699BC3 = {
 			isa = PBXGroup;
 			children = (
-				D0AC025A2F77E822007B93F7 /* lz4 */,
 				D6A7BDAD16A1DEA700D1426A /* Frameworks */,
 				AC4E46B809C2E0B3006B7E1B /* Source */,
 				D607B19A09A556E400699BC3 /* Products */,
@@ -102,6 +98,7 @@
 				D6A7BDA916A1DEA200D1426A /* OpenGL.framework */,
 				D6A7BDF016A1DED200D1426A /* XPLM.framework */,
 				D6A7BDF216A1DED200D1426A /* XPWidgets.framework */,
+				D09AB55B2F7A636B000562D4 /* lz4 */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -165,13 +162,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0AC025C2F77E970007B93F7 /* lz4.h in Sources */,
-				D0AC025D2F77E970007B93F7 /* lz4frame.h in Sources */,
-				D0AC025E2F77E970007B93F7 /* lz4hc.h in Sources */,
+				D09AB5562F7A6366000562D4 /* lz4file.c in Sources */,
+				D09AB5572F7A6366000562D4 /* lz4hc.c in Sources */,
+				D09AB5582F7A6366000562D4 /* lz4.c in Sources */,
+				D09AB5592F7A6366000562D4 /* lz4frame.c in Sources */,
+				D09AB55A2F7A6366000562D4 /* xxhash.c in Sources */,
 				D67297EB0F9E0FCC00CFD1FA /* Panelcast.cpp in Sources */,
-				D0AC02572F77E816007B93F7 /* lz4.c in Sources */,
-				D0AC02582F77E816007B93F7 /* lz4frame.c in Sources */,
-				D0AC02592F77E816007B93F7 /* lz4hc.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,10 +205,7 @@
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				EXECUTABLE_EXTENSION = xpl;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(XPSDK_ROOT)/Libraries/Mac",
-					lodepng,
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(XPSDK_ROOT)/Libraries/Mac";
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"APL=1",
@@ -237,6 +230,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(XPSDK_ROOT)/CHeaders/Widgets",
 					"$(XPSDK_ROOT)/CHeaders/XPLM",
+					external,
 					"$(HEADER_SEARCH_PATHS)",
 				);
 				MACH_O_TYPE = mh_bundle;
@@ -293,10 +287,7 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				EXECUTABLE_EXTENSION = xpl;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(XPSDK_ROOT)/Libraries/Mac",
-					lodepng,
-				);
+				FRAMEWORK_SEARCH_PATHS = "$(XPSDK_ROOT)/Libraries/Mac";
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"APL=1",
@@ -321,6 +312,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(XPSDK_ROOT)/CHeaders/Widgets",
 					"$(XPSDK_ROOT)/CHeaders/XPLM",
+					external,
 					"$(HEADER_SEARCH_PATHS)",
 				);
 				MACH_O_TYPE = mh_bundle;
@@ -351,12 +343,9 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				DEAD_CODE_STRIPPING = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(XPSDK_ROOT)/Libraries/Mac";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_NAME = Panelcast;
-				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -365,12 +354,9 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
 				DEAD_CODE_STRIPPING = YES;
-				FRAMEWORK_SEARCH_PATHS = "$(XPSDK_ROOT)/Libraries/Mac";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				PRODUCT_NAME = Panelcast;
-				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};

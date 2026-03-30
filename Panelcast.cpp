@@ -1,7 +1,13 @@
+// =====================================================================
+//
+// Panelcast.cpp
+//
+// X-Plane 12 Plugin zum Streaming von 2D‑Cockpit‑Panels über Netzwerk
+//
+// =====================================================================
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
-
     #include <winsock2.h>
     #include <windows.h>
     #include <ws2tcpip.h>
@@ -12,8 +18,8 @@
     #include <sys/socket.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-#define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl.h>
+    #define GL_SILENCE_DEPRECATION
+    #include <OpenGL/gl.h>
 #endif
 
 #include "Logger.h"
@@ -183,7 +189,7 @@ static void sendFrame(const std::vector<unsigned char>& frame)
     for (int i = 0; i < fragCount; i++) {
 
         int offset = i * maxPayload;
-        int chunkSize = min(maxPayload, compressedSize - offset);
+        int chunkSize = fmin(maxPayload, compressedSize - offset);
 
         FrameHeader hdr;
         hdr.magic = 0xABCD1234;
@@ -305,11 +311,13 @@ static void capturePanel(GLuint texID)
 static int drawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon)
 {
 
+    #ifdef _WIN32
     static bool gladLoaded = false;
     if (!gladLoaded) {
         gladLoadGL();
         gladLoaded = true;
     }
+    #endif
 
     // Wir wollen NACH dem Panel‑Draw in der Gauges‑Phase
     if (inPhase != xplm_Phase_Gauges || inIsBefore)
