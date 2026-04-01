@@ -4,11 +4,13 @@ import lz4.block
 from PIL import Image
 import cv2
 import numpy as np
+import time
 
 HEADER_SIZE = 32
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("0.0.0.0", 5000))
+sock.settimeout(2.0)  # 2 Sekunden warten
 
 current_frame = {}
 expected_frags = 0
@@ -17,7 +19,11 @@ frameID = None
 last_time = time.time()
 
 while True:
-    data, addr = sock.recvfrom(1500)
+    try:
+        data, addr = sock.recvfrom(1500)
+    except socket.timeout:
+        print("Timeout – keine Daten empfangen")
+        continue
 
     if len(data) < HEADER_SIZE:
         continue
