@@ -14,6 +14,8 @@ current_frame = {}
 expected_frags = 0
 frameID = None
 
+last_time = time.time()
+
 while True:
     data, addr = sock.recvfrom(1500)
 
@@ -43,5 +45,15 @@ while True:
         img_bgr = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
         flipped = cv2.flip(img_bgr, 0)
 
+        # FPS berechnen
+        current_time = time.time()
+        fps = 1.0 / (current_time - last_time)
+        last_time = current_time
+
+        # Titel zusammenbauen
+        title = f"Panelcast – {width} x {height} – {fps:.1f} FPS"
+
+        cv2.namedWindow("Panelcast", cv2.WINDOW_NORMAL)
+        cv2.setWindowTitle("Panelcast", title)
         cv2.imshow("Panelcast", flipped)
         cv2.waitKey(1)
