@@ -8,34 +8,33 @@
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
-#include <winsock2.h>
+#include <glad/glad.h>
 #include <windows.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
-#include <glad/glad.h>
 #include <GL/gl.h>
 #else
-#include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
 #endif
 
-#include "Logger.h"
-#include "XPLMPlugin.h"
-#include "XPLMDisplay.h"
-#include "XPLMGraphics.h"
-
-#include <thread>
 #include <atomic>
+#include <chrono>
+#include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <queue>
+#include <thread>
 #include <vector>
-#include <cstring>
-#include <chrono>
-#include <filesystem>
 
+#include "Logger.h"
+#include "XPLMDisplay.h"
+#include "XPLMGraphics.h"
+#include "XPLMPlugin.h"
 #include "lz4/lz4.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -50,14 +49,14 @@ Logger logger("[Panelcast]");
 static int g_width = 0;
 static int g_height = 0;
 
-static GLuint g_pbo[2] = { 0, 0 };
+static GLuint g_pbo[2] = {0, 0};
 static int g_pboIndex = 0;
 static bool g_pboInitialized = false;
 
 static std::mutex g_frameMutex;
 static std::queue<std::vector<unsigned char>> g_frameQueue;
 
-static std::atomic<bool> g_running{ false };
+static std::atomic<bool> g_running{false};
 static std::thread g_networkThread;
 
 static int g_sock = -1;
@@ -83,8 +82,7 @@ void unregisterCallbacks();
 // UDP initialisieren / Cleanup
 // -----------------------------
 
-static void initUDP(const char* ip, uint16_t port)
-{
+static void initUDP(const char* ip, uint16_t port) {
 #ifdef _WIN32
 	WSADATA wsa;
 	WSAStartup(MAKEWORD(2, 2), &wsa);
@@ -99,8 +97,7 @@ static void initUDP(const char* ip, uint16_t port)
 	inet_pton(AF_INET, ip, &g_destAddr.sin_addr);
 }
 
-static void closeUDP()
-{
+static void closeUDP() {
 	if (g_sock >= 0) {
 #ifdef _WIN32
 		closesocket(g_sock);
@@ -112,15 +109,12 @@ static void closeUDP()
 	}
 }
 
-
 // -----------------------------
 // PBO initialisieren
 // -----------------------------
 
-static void initPBOs(int width, int height)
-{
-	if (g_pboInitialized || width <= 0 || height <= 0)
-		return;
+static void initPBOs(int width, int height) {
+	if (g_pboInitialized || width <= 0 || height <= 0) return;
 
 	glGenBuffers(2, g_pbo);
 	for (int i = 0; i < 2; ++i) {
@@ -136,8 +130,7 @@ static void initPBOs(int width, int height)
 // Frame in Queue legen
 // ------------------------------------------------------------
 
-static void enqueueFrame(const unsigned char* ptr, int width, int height)
-{
+static void enqueueFrame(const unsigned char* ptr, int width, int height) {
 	const size_t size = static_cast<size_t>(width) * height * 4;
 	std::vector<unsigned char> frame(size);
 	std::memcpy(frame.data(), ptr, size);
@@ -146,9 +139,7 @@ static void enqueueFrame(const unsigned char* ptr, int width, int height)
 	g_frameQueue.push(std::move(frame));
 
 	// Queue begrenzen, damit wir nicht hinterherhinken
-	while (g_frameQueue.size() > 3) {
-		g_frameQueue.pop();
-	}
+	while (g_frameQueue.size() > 3) { g_frameQueue.pop(); }
 }
 
 // ------------------------------------------------------------
@@ -167,8 +158,7 @@ struct FrameHeader {
 	uint32_t compressedSize;
 };
 
-static void sendFrame(const std::vector<unsigned char>& frame)
-{
+static void sendFrame(const std::vector<unsigned char>& frame) {
 	const int width = g_width;
 	const int height = g_height;
 	const int rawSize = width * height * 4;
@@ -177,20 +167,14 @@ static void sendFrame(const std::vector<unsigned char>& frame)
 	int maxCompressed = LZ4_compressBound(rawSize);
 	std::vector<char> compressed(maxCompressed);
 
-	int compressedSize = LZ4_compress_default(
-		(const char*)frame.data(),
-		compressed.data(),
-		rawSize,
-		maxCompressed
-	);
+	int compressedSize = LZ4_compress_default((const char*)frame.data(), compressed.data(), rawSize, maxCompressed);
 
-	if (compressedSize <= 0)
-		return;
+	if (compressedSize <= 0) return;
 
 	compressed.resize(compressedSize);
 
 	// Fragmentierung
-	const int MTU = 1300;  // sicher unter 1500
+	const int MTU = 1300; // sicher unter 1500
 	const int headerSize = sizeof(FrameHeader);
 	const int maxPayload = MTU - headerSize;
 
@@ -199,7 +183,6 @@ static void sendFrame(const std::vector<unsigned char>& frame)
 	uint32_t frameID = g_frameCounter++;
 
 	for (int i = 0; i < fragCount; i++) {
-
 		int offset = i * maxPayload;
 		int chunkSize = fmin(maxPayload, compressedSize - offset);
 
@@ -222,8 +205,7 @@ static void sendFrame(const std::vector<unsigned char>& frame)
 		memcpy(packet.data() + headerSize, compressed.data() + offset, chunkSize);
 
 		// UDP senden
-		sendto(g_sock, packet.data(), packet.size(), 0,
-			(sockaddr*)&g_destAddr, sizeof(g_destAddr));
+		sendto(g_sock, packet.data(), packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
 	}
 }
 
@@ -231,10 +213,8 @@ static void sendFrame(const std::vector<unsigned char>& frame)
 // Netzwerk‑Thread
 // ------------------------------------------------------------
 
-static void networkThreadLoop()
-{
+static void networkThreadLoop() {
 	while (g_running.load()) {
-
 		std::vector<unsigned char> frame;
 
 		{
@@ -245,9 +225,7 @@ static void networkThreadLoop()
 			}
 		}
 
-		if (!frame.empty()) {
-			sendFrame(frame);
-		}
+		if (!frame.empty()) { sendFrame(frame); }
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
@@ -257,14 +235,12 @@ static void networkThreadLoop()
 // Panel capturen
 // ------------------------------------------------------------
 
-static GLuint getCurrentBoundTexture2D()
-{
+static GLuint getCurrentBoundTexture2D() {
 	return static_cast<GLuint>(g_tex);
 }
 
 // Panel‑Texturgröße automatisch ermitteln
-static void updatePanelSizeFromTexture(GLuint tex)
-{
+static void updatePanelSizeFromTexture(GLuint tex) {
 	if (tex == 0) return;
 
 	glBindTexture(GL_TEXTURE_2D, tex);
@@ -280,20 +256,13 @@ static void updatePanelSizeFromTexture(GLuint tex)
 }
 
 // Panel capturen: GPU → PBO → Queue
-static void capturePanel(GLuint texID)
-{
-	if (texID == 0)
-		return;
+static void capturePanel(GLuint texID) {
+	if (texID == 0) return;
 
-	if (g_width == 0 || g_height == 0) {
-		updatePanelSizeFromTexture(texID);
-	}
-	if (g_width == 0 || g_height == 0)
-		return;
+	if (g_width == 0 || g_height == 0) { updatePanelSizeFromTexture(texID); }
+	if (g_width == 0 || g_height == 0) return;
 
-	if (!g_pboInitialized)
-		initPBOs(g_width, g_height);
-
+	if (!g_pboInitialized) initPBOs(g_width, g_height);
 
 	int next = (g_pboIndex + 1) % 2;
 
@@ -313,21 +282,16 @@ static void capturePanel(GLuint texID)
 
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 	g_pboIndex = next;
-
 }
 
 // -----------------------------
 // Draw‑Callback
 // -----------------------------
 
-static int drawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon)
-{
-
+static int drawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon) {
 	// In dieser Phase ist die Panel‑Textur gebunden
 	GLuint panelTex = getCurrentBoundTexture2D();
-	if (panelTex != 0) {
-		capturePanel(panelTex);
-	}
+	if (panelTex != 0) { capturePanel(panelTex); }
 
 	return 1;
 }
@@ -343,29 +307,27 @@ void drawPolygon(int x, int y, int width, int height) {
 	glEnd();
 }
 
-
-static int beforePanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon)
-{
+static int beforePanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon) {
 	// State setzen
 	XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
 
 	glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // red
 	drawPolygon(100, 100, 1, 1);
-	
+
 	// Zeichnen
-	//glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // red
-	//drawPolygon(100, 0, 100, 1);
+	// glColor4f(1.0f, 0.0f, 0.0f, 1.0f); // red
+	// drawPolygon(100, 0, 100, 1);
 	//
-	//glColor4f(0.0f, 1.0f, 0.0f, 1.0f); // green
-	//drawPolygon(100, 1, 100, 1);
+	// glColor4f(0.0f, 1.0f, 0.0f, 1.0f); // green
+	// drawPolygon(100, 1, 100, 1);
 	//
-	//glColor4f(0.0f, 0.0f, 1.0f, 1.0f); // blue
-	//drawPolygon(100, 2, 100, 1);
+	// glColor4f(0.0f, 0.0f, 1.0f, 1.0f); // blue
+	// drawPolygon(100, 2, 100, 1);
 	//
-	//glColor4f(0.5f, 0.5f, 0.5f, 1.0f); // grey
-	//drawPolygon(100, 3, 100, 1);
-	
-	//glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
+	// glColor4f(0.5f, 0.5f, 0.5f, 1.0f); // grey
+	// drawPolygon(100, 3, 100, 1);
+
+	// glColor4f(0.0f, 0.0f, 0.0f, 0.0f);
 
 	return 1;
 }
@@ -373,17 +335,11 @@ static int beforePanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* i
 void logPixel(unsigned char* tex, int width, int x, int y) {
 	int idx = (y * width + x) * 4;
 
-	logger.log("Pixel (%d,%d) = R=%02x G=%02x B=%02x A=%02x\n",
-		x, y,
-		tex[idx + 0],
-		tex[idx + 1],
-		tex[idx + 2],
-		tex[idx + 3]);
+	logger.log("Pixel (%d,%d) = R=%02x G=%02x B=%02x A=%02x\n", x, y, tex[idx + 0], tex[idx + 1], tex[idx + 2],
+	           tex[idx + 3]);
 }
 
-static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon)
-{
-
+static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon) {
 	static int countcalls = 0;
 	countcalls++;
 
@@ -394,7 +350,6 @@ static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* in
 	unsigned char* texture_temp = (unsigned char*)malloc(cockpit_texture_width * cockpit_texture_height * 4);
 
 	for (int i = 0; i < 100; i++) {
-
 		XPLMBindTexture2d(i, 0);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &tw);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &th);
@@ -407,7 +362,8 @@ static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* in
 				std::vector<unsigned char> pixels(tw * th * 4);
 				glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 				std::filesystem::create_directories("panelcast/" + std::to_string(countcalls));
-				std::string filename = "panelcast/" + std::to_string(countcalls)  + "/Texture_" + std::to_string(i) + ".png";
+				std::string filename =
+				    "panelcast/" + std::to_string(countcalls) + "/Texture_" + std::to_string(i) + ".png";
 				stbi_write_png(filename.c_str(), tw, th, 4, pixels.data(), tw * 4);
 			}
 		}
@@ -415,7 +371,9 @@ static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* in
 		if ((tw == cockpit_texture_width) && (th == cockpit_texture_height) && (tf == cockpit_texture_format)) {
 			// Do expensive texture read-back since the dimensions are the same
 			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture_temp);
-			logger.log("Found candidate texture id=%d, width=%d, height=%d, internal format == %d\n", i, tw, th, tf);
+			logger.log("Found candidate texture id=%d, width=%d, height=%d, internal "
+			           "format == %d\n",
+			           i, tw, th, tf);
 			logPixel(texture_temp, cockpit_texture_width, 0, 0);
 			logPixel(texture_temp, cockpit_texture_width, 0, 1);
 			logPixel(texture_temp, cockpit_texture_width, 0, 2);
@@ -426,7 +384,8 @@ static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* in
 			int x = 100;
 			int y = 100;
 			int idx = (y * cockpit_texture_width + x) * 4;
-			if ((texture_temp[idx] == 0x00) && (texture_temp[idx +1] == 0xFF) && (texture_temp[idx +2] == 0x00) && (texture_temp[idx +3] == 0xFF)) {
+			if ((texture_temp[idx] == 0x00) && (texture_temp[idx + 1] == 0xFF) && (texture_temp[idx + 2] == 0x00) &&
+			    (texture_temp[idx + 3] == 0xFF)) {
 				logger.log("Texture id %d is a match from detected color\n", i);
 				g_tex = i;
 				unregisterCallbacks();
@@ -439,24 +398,20 @@ static int afterPanelCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* in
 	return 1;
 }
 
-void registerDrawCallback()
-{
+void registerDrawCallback() {
 	XPLMRegisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
 }
 
-void unregisterDrawCallback()
-{
+void unregisterDrawCallback() {
 	XPLMRegisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
 }
 
-void registerCallbacks()
-{
+void registerCallbacks() {
 	XPLMRegisterDrawCallback(beforePanelCallback, xplm_Phase_Panel, 1, nullptr);
 	XPLMRegisterDrawCallback(afterPanelCallback, xplm_Phase_Panel, 0, nullptr);
 }
 
-void unregisterCallbacks()
-{
+void unregisterCallbacks() {
 	XPLMUnregisterDrawCallback(beforePanelCallback, xplm_Phase_Panel, 1, nullptr);
 	XPLMUnregisterDrawCallback(afterPanelCallback, xplm_Phase_Panel, 0, nullptr);
 }
@@ -465,8 +420,7 @@ void unregisterCallbacks()
 // Plugin‑Entry‑Points
 // -----------------------------
 
-PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
-{
+PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 	std::strcpy(outName, "Panelcast");
 	std::strcpy(outSig, "de.codenuts.panelcast");
 	std::strcpy(outDesc, "Streaming von 2D‑Cockpit‑Panels über Netzwerk.");
@@ -489,36 +443,27 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc)
 	return 1;
 }
 
-PLUGIN_API void XPluginStop(void)
-{
+PLUGIN_API void XPluginStop(void) {
 	unregisterCallbacks();
 	unregisterDrawCallback();
 
 	g_running.store(false);
-	if (g_networkThread.joinable())
-		g_networkThread.join();
+	if (g_networkThread.joinable()) g_networkThread.join();
 
 	closeUDP();
 }
 
-PLUGIN_API int XPluginEnable(void)
-{
+PLUGIN_API int XPluginEnable(void) {
 	return 1;
 }
 
-PLUGIN_API void XPluginDisable(void)
-{
-}
+PLUGIN_API void XPluginDisable(void) {}
 
-PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inParam)
-{
-}
+PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inParam) {}
 
-int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void* in_refcon)
-{
+int handle_command(XPLMCommandRef cmd_id, XPLMCommandPhase phase, void* in_refcon) {
 	// Only do the command when it is being released
-	if (phase == xplm_CommandEnd)
-	{
+	if (phase == xplm_CommandEnd) {
 		logger.log("Incoming command %p with reference [%s]\n", cmd_id, (char*)in_refcon);
 		if (cmd_id == cmd_texid_inc) {
 			g_tex++;

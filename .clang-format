@@ -1,0 +1,27 @@
+BasedOnStyle: LLVM
+
+# Tabs statt Spaces
+UseTab: ForIndentation
+IndentWidth: 4
+TabWidth: 4
+
+# Moderne, kompakte K&R‑ähnliche Braces
+BreakBeforeBraces: Attach
+
+# Pointer-Stil
+PointerAlignment: Left
+
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortBlocksOnASingleLine: true
+
+# Moderne C++-Listenformatierung
+Cpp11BracedListStyle: true
+
+# Includes sortieren, aber nicht aggressiv
+SortIncludes: true
+IncludeBlocks: Preserve
+
+# Keine übertriebene Zeilenumbruch-Logik
+ColumnLimit: 120
