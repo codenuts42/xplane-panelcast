@@ -11,7 +11,7 @@ BreakBeforeBraces: Attach
 # Pointer-Stil
 PointerAlignment: Left
 
-AllowShortIfStatementsOnASingleLine: true
+#AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: Inline
 AllowShortBlocksOnASingleLine: true
