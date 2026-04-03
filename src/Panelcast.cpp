@@ -247,41 +247,50 @@ struct FrameHeader {
 };
 
 static void sendCompressedFrame(const char* compData, int compSize, int w, int h, uint32_t frameID) {
-	if (compSize <= 0 || w <= 0 || h <= 0)
+	if (compSize <= 0)
 		return;
 
 	const int rawSize = w * h * 4;
-	const int MTU = 1300;
-	const int headerSize = sizeof(FrameHeader);
-	const int maxPayload = MTU - headerSize;
-	if (maxPayload <= 0)
-		return;
 
+	const int headerSize = sizeof(FrameHeader);
+	const int maxPayload = 1440; // optimale MTU
 	int fragCount = (compSize + maxPayload - 1) / maxPayload;
+
+	FrameHeader hdr;
+	hdr.magic = 0xABCD1234;
+	hdr.frameID = frameID;
+	hdr.fragCount = (uint16_t)fragCount;
+	hdr.width = w;
+	hdr.height = h;
+	hdr.rawSize = rawSize;
+	hdr.compressedSize = compSize;
 
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
-		if (offset >= compSize)
-			break;
-
 		int chunkSize = std::min(maxPayload, compSize - offset);
 
-		FrameHeader hdr;
-		hdr.magic = 0xABCD1234;
-		hdr.frameID = frameID;
 		hdr.fragIndex = (uint16_t)i;
-		hdr.fragCount = (uint16_t)fragCount;
 		hdr.payloadSize = (uint32_t)chunkSize;
-		hdr.width = (uint32_t)w;
-		hdr.height = (uint32_t)h;
-		hdr.rawSize = (uint32_t)rawSize;
-		hdr.compressedSize = (uint32_t)compSize;
 
-		std::vector<char> packet(headerSize + chunkSize);
-		memcpy(packet.data(), &hdr, headerSize);
-		memcpy(packet.data() + headerSize, compData + offset, chunkSize);
+		WSABUF bufs[2];
 
-		sendto(g_sock, packet.data(), (int)packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
+		// Header (keine Kopie)
+		bufs[0].buf = (CHAR*)&hdr;
+		bufs[0].len = headerSize;
+
+		// Payload (keine Kopie)
+		bufs[1].buf = (CHAR*)(compData + offset);
+		bufs[1].len = chunkSize;
+
+		DWORD sent = 0;
+
+		//  zwei Buffer → Scatter/Gather
+		int r = WSASendTo(g_sock, bufs, 2, &sent, 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr), NULL, NULL);
+
+		if (r == SOCKET_ERROR) {
+			int err = WSAGetLastError();
+			logger.log("WSASendTo ERROR %d", err);
+		}
 	}
 }
 
