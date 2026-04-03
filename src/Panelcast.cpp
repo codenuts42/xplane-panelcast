@@ -38,12 +38,6 @@
 
 Logger logger("[Panelcast]");
 
-// High-res Timer
-static inline double now_ms() {
-	using namespace std::chrono;
-	return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
-}
-
 // =====================================================================
 // ROI‑Variablen (werden per DataRef gesetzt)
 // =====================================================================
@@ -221,8 +215,6 @@ static void capturePanelRegion() {
 
 	int next = (g_pboIndex + 1) % 2;
 
-	double t0 = now_ms();
-
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[g_pboIndex]);
 	glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
@@ -230,9 +222,6 @@ static void capturePanelRegion() {
 	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 
 	if (ptr) {
-		double t1 = now_ms();
-		logger.log("READ %.3f ms (w=%d h=%d)", t1 - t0, w, h);
-
 		enqueueRawFrame(ptr, w, h);
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
@@ -270,8 +259,6 @@ static void sendCompressedFrame(const char* compData, int compSize, int w, int h
 
 	int fragCount = (compSize + maxPayload - 1) / maxPayload;
 
-	double t0 = now_ms();
-
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
 		if (offset >= compSize)
@@ -296,9 +283,6 @@ static void sendCompressedFrame(const char* compData, int compSize, int w, int h
 
 		sendto(g_sock, packet.data(), (int)packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
 	}
-
-	double t1 = now_ms();
-	logger.log("SEND LZ4 %.3f ms (%d fragments, %dKB)", t1 - t0, fragCount, compSize / 1024);
 }
 
 static void workerThreadLoop() {
@@ -321,20 +305,12 @@ static void workerThreadLoop() {
 			int maxComp = LZ4_compressBound(rawSize);
 			std::vector<char> comp(maxComp);
 
-			double t0 = now_ms();
-
-			int compSize = LZ4_compress_fast(frame.pixels.data(), comp.data(), rawSize, maxComp,
-			                                 8 // acceleration
-			);
-
-			double t1 = now_ms();
+			int compSize = LZ4_compress_fast(frame.pixels.data(), comp.data(), rawSize, maxComp, 8);
 
 			if (compSize <= 0) {
 				logger.log("LZ4 ERROR");
 			} else {
 				comp.resize(compSize);
-				logger.log("LZ4 %.3f ms (raw=%dKB comp=%dKB)", t1 - t0, rawSize / 1024, compSize / 1024);
-
 				uint32_t frameID = g_frameCounter++;
 				sendCompressedFrame(comp.data(), compSize, w, h, frameID);
 			}
