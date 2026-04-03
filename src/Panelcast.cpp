@@ -38,6 +38,12 @@
 
 Logger logger("[Panelcast]");
 
+// High-res Timer
+static inline double now_ms() {
+	using namespace std::chrono;
+	return duration<double, std::milli>(steady_clock::now().time_since_epoch()).count();
+}
+
 // =====================================================================
 // ROI‑Variablen (werden per DataRef gesetzt)
 // =====================================================================
@@ -98,10 +104,18 @@ static int g_pboHeight = 0;
 static int g_sock = -1;
 static sockaddr_in g_destAddr;
 
-static std::mutex g_frameMutex;
-static std::queue<std::vector<char>> g_frameQueue;
+struct RawFrame {
+	std::vector<char> pixels; // RGBA8
+	int width = 0;
+	int height = 0;
+};
+
+static std::mutex g_rawMutex;
+static std::queue<RawFrame> g_rawQueue;
+
 static std::atomic<bool> g_running{false};
-static std::thread g_networkThread;
+static std::thread g_workerThread;
+
 static uint32_t g_frameCounter = 0;
 
 // =====================================================================
@@ -170,28 +184,61 @@ static void initOrResizePBOs(int w, int h) {
 // Kompression + Queue
 // =====================================================================
 
-static void compressAndEnqueue(const unsigned char* ptr, int w, int h) {
+static void enqueueRawFrame(const unsigned char* ptr, int w, int h) {
 	if (!ptr || w <= 0 || h <= 0)
 		return;
 
 	const int rawSize = w * h * 4;
-	int maxCompressed = LZ4_compressBound(rawSize);
-	if (maxCompressed <= 0)
+
+	RawFrame f;
+	f.width = w;
+	f.height = h;
+	f.pixels.resize(rawSize);
+	memcpy(f.pixels.data(), ptr, rawSize);
+
+	{
+		std::lock_guard<std::mutex> lock(g_rawMutex);
+
+		// Queue auf Größe 1 halten → alte Frames verwerfen
+		while (!g_rawQueue.empty()) g_rawQueue.pop();
+
+		g_rawQueue.push(std::move(f));
+	}
+}
+
+static void capturePanelRegion() {
+	int x = roi_x;
+	int y = roi_y;
+	int w = roi_w;
+	int h = roi_h;
+
+	if (w <= 0 || h <= 0)
 		return;
 
-	std::vector<char> compressed(maxCompressed);
-
-	int compressedSize = LZ4_compress_default((const char*)ptr, compressed.data(), rawSize, maxCompressed);
-
-	if (compressedSize <= 0)
+	initOrResizePBOs(w, h);
+	if (!g_pboInitialized)
 		return;
 
-	compressed.resize(compressedSize);
+	int next = (g_pboIndex + 1) % 2;
 
-	std::lock_guard<std::mutex> lock(g_frameMutex);
-	g_frameQueue.push(std::move(compressed));
+	double t0 = now_ms();
 
-	while (g_frameQueue.size() > 3) g_frameQueue.pop();
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[g_pboIndex]);
+	glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[next]);
+	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
+
+	if (ptr) {
+		double t1 = now_ms();
+		logger.log("READ %.3f ms (w=%d h=%d)", t1 - t0, w, h);
+
+		enqueueRawFrame(ptr, w, h);
+		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
+	}
+
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+	g_pboIndex = next;
 }
 
 // =====================================================================
@@ -210,26 +257,27 @@ struct FrameHeader {
 	uint32_t compressedSize;
 };
 
-static void sendFrame(const std::vector<char>& data, int w, int h) {
-	const int compressedSize = (int)data.size();
-	if (compressedSize <= 0 || w <= 0 || h <= 0)
+static void sendCompressedFrame(const char* compData, int compSize, int w, int h, uint32_t frameID) {
+	if (compSize <= 0 || w <= 0 || h <= 0)
 		return;
 
 	const int rawSize = w * h * 4;
-
 	const int MTU = 1300;
 	const int headerSize = sizeof(FrameHeader);
 	const int maxPayload = MTU - headerSize;
+	if (maxPayload <= 0)
+		return;
 
-	int fragCount = (compressedSize + maxPayload - 1) / maxPayload;
-	uint32_t frameID = g_frameCounter++;
+	int fragCount = (compSize + maxPayload - 1) / maxPayload;
+
+	double t0 = now_ms();
 
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
-		if (offset >= compressedSize)
+		if (offset >= compSize)
 			break;
 
-		int chunkSize = std::min(maxPayload, compressedSize - offset);
+		int chunkSize = std::min(maxPayload, compSize - offset);
 
 		FrameHeader hdr;
 		hdr.magic = 0xABCD1234;
@@ -240,75 +288,60 @@ static void sendFrame(const std::vector<char>& data, int w, int h) {
 		hdr.width = (uint32_t)w;
 		hdr.height = (uint32_t)h;
 		hdr.rawSize = (uint32_t)rawSize;
-		hdr.compressedSize = (uint32_t)compressedSize;
+		hdr.compressedSize = (uint32_t)compSize;
 
 		std::vector<char> packet(headerSize + chunkSize);
 		memcpy(packet.data(), &hdr, headerSize);
-		memcpy(packet.data() + headerSize, data.data() + offset, chunkSize);
+		memcpy(packet.data() + headerSize, compData + offset, chunkSize);
 
 		sendto(g_sock, packet.data(), (int)packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
 	}
+
+	double t1 = now_ms();
+	logger.log("SEND LZ4 %.3f ms (%d fragments, %dKB)", t1 - t0, fragCount, compSize / 1024);
 }
 
-// =====================================================================
-// Netzwerk‑Thread
-// =====================================================================
-
-static void networkThreadLoop() {
+static void workerThreadLoop() {
 	while (g_running.load()) {
-		std::vector<char> frame;
-		int w = 0, h = 0;
+		RawFrame frame;
 
 		{
-			std::lock_guard<std::mutex> lock(g_frameMutex);
-			if (!g_frameQueue.empty()) {
-				frame = std::move(g_frameQueue.front());
-				g_frameQueue.pop();
-				w = g_pboWidth;
-				h = g_pboHeight;
+			std::lock_guard<std::mutex> lock(g_rawMutex);
+			if (!g_rawQueue.empty()) {
+				frame = std::move(g_rawQueue.front());
+				g_rawQueue.pop();
 			}
 		}
 
-		if (!frame.empty() && w > 0 && h > 0)
-			sendFrame(frame, w, h);
+		if (!frame.pixels.empty()) {
+			int w = frame.width;
+			int h = frame.height;
+			int rawSize = (int)frame.pixels.size();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			int maxComp = LZ4_compressBound(rawSize);
+			std::vector<char> comp(maxComp);
+
+			double t0 = now_ms();
+
+			int compSize = LZ4_compress_fast(frame.pixels.data(), comp.data(), rawSize, maxComp,
+			                                 8 // acceleration
+			);
+
+			double t1 = now_ms();
+
+			if (compSize <= 0) {
+				logger.log("LZ4 ERROR");
+			} else {
+				comp.resize(compSize);
+				logger.log("LZ4 %.3f ms (raw=%dKB comp=%dKB)", t1 - t0, rawSize / 1024, compSize / 1024);
+
+				uint32_t frameID = g_frameCounter++;
+				sendCompressedFrame(comp.data(), compSize, w, h, frameID);
+			}
+		} else {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
 	}
-}
-
-// =====================================================================
-// Panel‑Framebuffer lesen
-// =====================================================================
-
-static void capturePanelRegion() {
-
-	int x = roi_x;
-	int y = roi_y;
-	int w = roi_w;
-	int h = roi_h;
-
-	if (w <= 0 || h <= 0)
-		return;
-
-	initOrResizePBOs(w, h);
-	if (!g_pboInitialized)
-		return;
-
-	int next = (g_pboIndex + 1) % 2;
-
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[g_pboIndex]);
-	glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[next]);
-	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
-
-	if (ptr) {
-		compressAndEnqueue(ptr, w, h);
-		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
-	}
-
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-	g_pboIndex = next;
 }
 
 // =====================================================================
@@ -363,7 +396,7 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 	XPLMRegisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
 
 	g_running.store(true);
-	g_networkThread = std::thread(networkThreadLoop);
+	g_workerThread = std::thread(workerThreadLoop);
 
 	return 1;
 }
@@ -372,8 +405,8 @@ PLUGIN_API void XPluginStop(void) {
 	XPLMUnregisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
 
 	g_running.store(false);
-	if (g_networkThread.joinable())
-		g_networkThread.join();
+	if (g_workerThread.joinable())
+		g_workerThread.join();
 
 	closeUDP();
 
