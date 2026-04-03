@@ -1,19 +1,17 @@
 // =====================================================================
-//
-// Panelcast.cpp
-//
-// X-Plane 12 Plugin zum Streaming von 2D‑Cockpit‑Panels über Netzwerk
-//
+// Panelcast.cpp – finale Version mit dynamischem ROI per DataRefs
+// Liest direkt den Panel‑Framebuffer (xplm_Phase_Gauges) und streamt
+// einen per DataRefs einstellbaren Ausschnitt über UDP (LZ4).
 // =====================================================================
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <glad/glad.h>
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
-#include <GL/gl.h>
 #else
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -22,51 +20,93 @@
 #include <OpenGL/gl.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstring>
-#include <filesystem>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <vector>
 
 #include "Logger.h"
+#include "XPLMDataAccess.h"
 #include "XPLMDisplay.h"
 #include "XPLMGraphics.h"
 #include "XPLMPlugin.h"
 #include "lz4/lz4.h"
 
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb/stb_image_write.h"
-
-// -----------------------------
-// Globale Variablen
-// -----------------------------
-
 Logger logger("[Panelcast]");
 
-static GLint g_tex = 0;
-static int g_width = 0;
-static int g_height = 0;
+// =====================================================================
+// ROI‑Variablen (werden per DataRef gesetzt)
+// =====================================================================
+static int roi_x = 5;
+static int roi_y = 1543;
+static int roi_w = 1015;
+static int roi_h = 500;
 
+// =====================================================================
+// DataRefs
+// =====================================================================
+static XPLMDataRef dr_roi_x = nullptr;
+static XPLMDataRef dr_roi_y = nullptr;
+static XPLMDataRef dr_roi_w = nullptr;
+static XPLMDataRef dr_roi_h = nullptr;
+
+// Getter/Setter
+int get_roi_x(void*) {
+	return roi_x;
+}
+void set_roi_x(void*, int v) {
+	roi_x = v;
+}
+
+int get_roi_y(void*) {
+	return roi_y;
+}
+void set_roi_y(void*, int v) {
+	roi_y = v;
+}
+
+int get_roi_w(void*) {
+	return roi_w;
+}
+void set_roi_w(void*, int v) {
+	roi_w = v;
+}
+
+int get_roi_h(void*) {
+	return roi_h;
+}
+void set_roi_h(void*, int v) {
+	roi_h = v;
+}
+
+// =====================================================================
+// PBO
+// =====================================================================
 static GLuint g_pbo[2] = {0, 0};
 static int g_pboIndex = 0;
 static bool g_pboInitialized = false;
+static int g_pboWidth = 0;
+static int g_pboHeight = 0;
 
-static std::mutex g_frameMutex;
-static std::queue<std::vector<unsigned char>> g_frameQueue;
-static uint32_t g_frameCounter = 0;
-
-static std::atomic<bool> g_running{false};
-static std::thread g_networkThread;
-
+// =====================================================================
+// Netzwerk
+// =====================================================================
 static int g_sock = -1;
 static sockaddr_in g_destAddr;
 
-// -----------------------------
-// UDP initialisieren / Cleanup
-// -----------------------------
+static std::mutex g_frameMutex;
+static std::queue<std::vector<char>> g_frameQueue;
+static std::atomic<bool> g_running{false};
+static std::thread g_networkThread;
+static uint32_t g_frameCounter = 0;
+
+// =====================================================================
+// UDP
+// =====================================================================
 
 static void initUDP(const char* ip, uint16_t port) {
 #ifdef _WIN32
@@ -79,7 +119,6 @@ static void initUDP(const char* ip, uint16_t port) {
 	memset(&g_destAddr, 0, sizeof(g_destAddr));
 	g_destAddr.sin_family = AF_INET;
 	g_destAddr.sin_port = htons(port);
-	g_destAddr.sin_family = AF_INET;
 	inet_pton(AF_INET, ip, &g_destAddr.sin_addr);
 }
 
@@ -95,43 +134,69 @@ static void closeUDP() {
 	}
 }
 
-// -----------------------------
-// PBO initialisieren
-// -----------------------------
+// =====================================================================
+// PBO initialisieren / neu anpassen
+// =====================================================================
 
-static void initPBOs(int width, int height) {
-	if (g_pboInitialized || width <= 0 || height <= 0)
+static void initOrResizePBOs(int w, int h) {
+	if (w <= 0 || h <= 0)
 		return;
 
+	if (g_pboInitialized && w == g_pboWidth && h == g_pboHeight)
+		return;
+
+	if (g_pboInitialized) {
+		glDeleteBuffers(2, g_pbo);
+		g_pboInitialized = false;
+	}
+
+	const size_t size = (size_t)w * h * 4;
+
 	glGenBuffers(2, g_pbo);
-	for (int i = 0; i < 2; ++i) {
+	for (int i = 0; i < 2; i++) {
 		glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[i]);
-		glBufferData(GL_PIXEL_PACK_BUFFER, width * height * 4, nullptr, GL_STREAM_READ);
+		glBufferData(GL_PIXEL_PACK_BUFFER, size, nullptr, GL_STREAM_READ);
 	}
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
 	g_pboInitialized = true;
+	g_pboWidth = w;
+	g_pboHeight = h;
+
+	logger.log("PBOs initialized/resized to %dx%d", w, h);
 }
 
-// ------------------------------------------------------------
-// Frame in Queue legen
-// ------------------------------------------------------------
+// =====================================================================
+// Kompression + Queue
+// =====================================================================
 
-static void enqueueFrame(const unsigned char* ptr, int width, int height) {
-	const size_t size = static_cast<size_t>(width) * height * 4;
-	std::vector<unsigned char> frame(size);
-	std::memcpy(frame.data(), ptr, size);
+static void compressAndEnqueue(const unsigned char* ptr, int w, int h) {
+	if (!ptr || w <= 0 || h <= 0)
+		return;
+
+	const int rawSize = w * h * 4;
+	int maxCompressed = LZ4_compressBound(rawSize);
+	if (maxCompressed <= 0)
+		return;
+
+	std::vector<char> compressed(maxCompressed);
+
+	int compressedSize = LZ4_compress_default((const char*)ptr, compressed.data(), rawSize, maxCompressed);
+
+	if (compressedSize <= 0)
+		return;
+
+	compressed.resize(compressedSize);
 
 	std::lock_guard<std::mutex> lock(g_frameMutex);
-	g_frameQueue.push(std::move(frame));
+	g_frameQueue.push(std::move(compressed));
 
-	// Queue begrenzen, damit wir nicht hinterherhinken
-	while (g_frameQueue.size() > 3) { g_frameQueue.pop(); }
+	while (g_frameQueue.size() > 3) g_frameQueue.pop();
 }
 
-// ------------------------------------------------------------
-// LZ4 + UDP‑Streaming
-// ------------------------------------------------------------
+// =====================================================================
+// Frame senden
+// =====================================================================
 
 struct FrameHeader {
 	uint32_t magic;
@@ -145,118 +210,100 @@ struct FrameHeader {
 	uint32_t compressedSize;
 };
 
-static void sendFrame(const std::vector<unsigned char>& frame) {
-	const int width = g_width;
-	const int height = g_height;
-	const int rawSize = width * height * 4;
-
-	// LZ4 komprimieren
-	int maxCompressed = LZ4_compressBound(rawSize);
-	std::vector<char> compressed(maxCompressed);
-
-	int compressedSize = LZ4_compress_default((const char*)frame.data(), compressed.data(), rawSize, maxCompressed);
-
-	if (compressedSize <= 0)
+static void sendFrame(const std::vector<char>& data, int w, int h) {
+	const int compressedSize = (int)data.size();
+	if (compressedSize <= 0 || w <= 0 || h <= 0)
 		return;
 
-	compressed.resize(compressedSize);
+	const int rawSize = w * h * 4;
 
-	// Fragmentierung
-	const int MTU = 1300; // sicher unter 1500
+	const int MTU = 1300;
 	const int headerSize = sizeof(FrameHeader);
 	const int maxPayload = MTU - headerSize;
 
 	int fragCount = (compressedSize + maxPayload - 1) / maxPayload;
-
 	uint32_t frameID = g_frameCounter++;
 
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
-		int chunkSize = fmin(maxPayload, compressedSize - offset);
+		if (offset >= compressedSize)
+			break;
+
+		int chunkSize = std::min(maxPayload, compressedSize - offset);
 
 		FrameHeader hdr;
 		hdr.magic = 0xABCD1234;
 		hdr.frameID = frameID;
-		hdr.fragIndex = i;
-		hdr.fragCount = fragCount;
-		hdr.payloadSize = chunkSize;
-		hdr.width = width;
-		hdr.height = height;
-		hdr.rawSize = rawSize;
-		hdr.compressedSize = compressedSize;
+		hdr.fragIndex = (uint16_t)i;
+		hdr.fragCount = (uint16_t)fragCount;
+		hdr.payloadSize = (uint32_t)chunkSize;
+		hdr.width = (uint32_t)w;
+		hdr.height = (uint32_t)h;
+		hdr.rawSize = (uint32_t)rawSize;
+		hdr.compressedSize = (uint32_t)compressedSize;
 
-		// Paket bauen
-		std::vector<char> packet;
-		packet.resize(headerSize + chunkSize);
-
+		std::vector<char> packet(headerSize + chunkSize);
 		memcpy(packet.data(), &hdr, headerSize);
-		memcpy(packet.data() + headerSize, compressed.data() + offset, chunkSize);
+		memcpy(packet.data() + headerSize, data.data() + offset, chunkSize);
 
-		// UDP senden
-		sendto(g_sock, packet.data(), packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
+		sendto(g_sock, packet.data(), (int)packet.size(), 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr));
 	}
 }
 
-// ------------------------------------------------------------
+// =====================================================================
 // Netzwerk‑Thread
-// ------------------------------------------------------------
+// =====================================================================
 
 static void networkThreadLoop() {
 	while (g_running.load()) {
-		std::vector<unsigned char> frame;
+		std::vector<char> frame;
+		int w = 0, h = 0;
 
 		{
 			std::lock_guard<std::mutex> lock(g_frameMutex);
 			if (!g_frameQueue.empty()) {
 				frame = std::move(g_frameQueue.front());
 				g_frameQueue.pop();
+				w = g_pboWidth;
+				h = g_pboHeight;
 			}
 		}
 
-		if (!frame.empty()) {
-			sendFrame(frame);
-		}
+		if (!frame.empty() && w > 0 && h > 0)
+			sendFrame(frame, w, h);
 
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
-// ------------------------------------------------------------
-// Panel capturen
-// ------------------------------------------------------------
+// =====================================================================
+// Panel‑Framebuffer lesen
+// =====================================================================
 
-// Panel‑Texturgröße automatisch ermitteln
-static void updatePanelSizeFromTexture(GLuint tex) {
-	if (tex == 0)
+static void capturePanelRegion() {
+
+	int x = roi_x;
+	int y = roi_y;
+	int w = roi_w;
+	int h = roi_h;
+
+	if (w <= 0 || h <= 0)
 		return;
 
-	glBindTexture(GL_TEXTURE_2D, tex);
+	initOrResizePBOs(w, h);
+	if (!g_pboInitialized)
+		return;
 
-	GLint w = 0, h = 0;
-	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
-	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-
-	if (w > 0 && h > 0) {
-		g_width = w;
-		g_height = h;
-	}
-}
-
-// Panel capturen: GPU → PBO → Queue
-static void capturePanel(GLuint texID) {
 	int next = (g_pboIndex + 1) % 2;
 
-	// GPU → PBO (asynchron)
-	glBindTexture(GL_TEXTURE_2D, texID);
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[g_pboIndex]);
-	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-	// CPU liest vorherigen PBO
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[next]);
 	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 
 	if (ptr) {
-		enqueueFrame(ptr, g_width, g_height);
+		compressAndEnqueue(ptr, w, h);
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
 
@@ -264,94 +311,50 @@ static void capturePanel(GLuint texID) {
 	g_pboIndex = next;
 }
 
-// -----------------------------
+// =====================================================================
 // Draw‑Callback
-// -----------------------------
-
-struct Point {
-	int x, y;
-};
-
-struct Color {
-	float r, g, b, a;
-};
-
-void drawPolygon(int x, int y, int width, int height) {
-	glBegin(GL_POLYGON);
-	glVertex2i(x, y);
-	glVertex2i(x, y + height);
-	glVertex2i(x + width, y + height);
-	glVertex2i(x + width, y);
-	glEnd();
-}
-
-static int findTexture() {
-	// draw markerpoint
-	Point markerpoint = {100, 100};
-	Color markercolor = {1.0f, 0.0f, 0.0f, 1.0f}; // red
-	XPLMSetGraphicsState(0, 0, 0, 0, 0, 0, 0);
-	glColor4f(markercolor.r, markercolor.g, markercolor.b, markercolor.a);
-	drawPolygon(markerpoint.x, markerpoint.y, 1, 1);
-
-	// find texture
-	int width, height;
-	for (int i = 0; i < 100; i++) {
-		XPLMBindTexture2d(i, 0);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
-		if (width > 0 && height > 0) {
-			logger.log("Texture found id=%d (%d x %d)", i, width, height);
-			std::vector<unsigned char> pixels(width * height * 4);
-			glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-			int idx = (markerpoint.y * width + markerpoint.x) * 4;
-			if (pixels[idx] == markercolor.r && pixels[idx + 1] == markercolor.g && pixels[idx + 2] == markercolor.b &&
-			    pixels[idx + 3] == markercolor.a) {
-				return i;
-			}
-		}
-	}
-	return 0;
-}
+// =====================================================================
 
 static int drawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon) {
-
-	if (g_tex == 0) {
-		g_tex = findTexture();
-	}
-
-	if (g_tex == 0) {
+	// "Letzten" FBO ermitteln und nur dann Capturen
+	static GLint maxFBO = 0;
+	GLint currentFBO = 0;
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFBO);
+	if (currentFBO < maxFBO)
 		return 1;
-	}
+	maxFBO = currentFBO;
 
-	if (g_width == 0 || g_height == 0) {
-		updatePanelSizeFromTexture(g_tex);
-	}
-
-	if (g_width == 0 || g_height == 0) {
-		return 1;
-	}
-
-	if (!g_pboInitialized) {
-		initPBOs(g_width, g_height);
-	}
-
-	if (g_tex != 0) {
-		capturePanel(g_tex);
-	}
-
+	capturePanelRegion();
 	return 1;
 }
 
-// -----------------------------
-// Plugin‑Entry‑Points
-// -----------------------------
+// =====================================================================
+// Plugin‑Lifecycle
+// =====================================================================
 
 PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 	std::strcpy(outName, "Panelcast");
 	std::strcpy(outSig, "de.codenuts.panelcast");
-	std::strcpy(outDesc, "Streaming von 2D‑Cockpit‑Panels über Netzwerk.");
+	std::strcpy(outDesc, "Streaming eines Panel‑Ausschnitts über Netzwerk.");
 
-	initUDP("127.0.0.1", 5000); // IP/Port anpassen
+	// DataRefs registrieren
+	dr_roi_x =
+	    XPLMRegisterDataAccessor("panelcast/roi_x", xplmType_Int, 1, get_roi_x, set_roi_x, nullptr, nullptr, nullptr,
+	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	dr_roi_y =
+	    XPLMRegisterDataAccessor("panelcast/roi_y", xplmType_Int, 1, get_roi_y, set_roi_y, nullptr, nullptr, nullptr,
+	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	dr_roi_w =
+	    XPLMRegisterDataAccessor("panelcast/roi_w", xplmType_Int, 1, get_roi_w, set_roi_w, nullptr, nullptr, nullptr,
+	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	dr_roi_h =
+	    XPLMRegisterDataAccessor("panelcast/roi_h", xplmType_Int, 1, get_roi_h, set_roi_h, nullptr, nullptr, nullptr,
+	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	initUDP("127.0.0.1", 5000);
 
 #ifdef _WIN32
 	gladLoadGL();
@@ -366,19 +369,22 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 }
 
 PLUGIN_API void XPluginStop(void) {
-	XPLMRegisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
+	XPLMUnregisterDrawCallback(drawCallback, xplm_Phase_Gauges, 0, nullptr);
 
 	g_running.store(false);
-	if (g_networkThread.joinable()) {
+	if (g_networkThread.joinable())
 		g_networkThread.join();
-	}
+
 	closeUDP();
+
+	if (g_pboInitialized) {
+		glDeleteBuffers(2, g_pbo);
+		g_pboInitialized = false;
+	}
 }
 
 PLUGIN_API int XPluginEnable(void) {
 	return 1;
 }
-
 PLUGIN_API void XPluginDisable(void) {}
-
 PLUGIN_API void XPluginReceiveMessage(XPLMPluginID inFrom, int inMsg, void* inParam) {}
