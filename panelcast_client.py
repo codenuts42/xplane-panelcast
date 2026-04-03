@@ -59,7 +59,7 @@ while True:
         # Titel zusammenbauen
         title = f"Panelcast – {width} x {height} – {fps:.1f} FPS"
 
-        cv2.namedWindow("Panelcast", cv2.WINDOW_NORMAL)
+        cv2.namedWindow("Panelcast", cv2.WINDOW_AUTOSIZE)
         cv2.setWindowTitle("Panelcast", title)
         cv2.imshow("Panelcast", flipped)
         cv2.waitKey(1)
