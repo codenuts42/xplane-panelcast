@@ -31,13 +31,11 @@ struct PanelCaptureState {
  */
 class PanelCapturer {
   public:
-	void captureAllPanels(const std::vector<PanelROI>& rois, std::unordered_map<uint16_t, RawPanelFrame>& outFrames,
-	                      std::mutex& outMutex);
+	void captureAllPanels(const std::vector<PanelROI>& rois, std::unordered_map<uint16_t, RawPanelFrame>& outFrames);
 
   private:
 	void initOrResizePanelPBOs(uint16_t panelID, int w, int h);
-	void captureSinglePanel(const PanelROI& roi, std::unordered_map<uint16_t, RawPanelFrame>& outFrames,
-	                        std::mutex& outMutex);
+	void captureSinglePanel(const PanelROI& roi, std::unordered_map<uint16_t, RawPanelFrame>& outFrames);
 
 	std::unordered_map<uint16_t, PanelCaptureState> panelStates_;
 };

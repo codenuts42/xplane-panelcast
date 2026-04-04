@@ -57,7 +57,8 @@ void PanelcastPlugin::stop() {
 int PanelcastPlugin::enable() {
 	return 1;
 }
-void PanelcastPlugin::disable() {}
+void PanelcastPlugin::disable() {
+}
 
 int PanelcastPlugin::drawCallbackTrampoline(XPLMDrawingPhase inPhase, int inIsBefore, void* refcon) {
 	return static_cast<PanelcastPlugin*>(refcon)->drawCallback();
@@ -67,15 +68,17 @@ int PanelcastPlugin::drawCallback() {
 	static GLint maxFBO = 0;
 	GLint currentFBO = 0;
 
-	// Only capture from the highest FBO (X‑Plane draws multiple passes)
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFBO);
 	if (currentFBO < maxFBO)
 		return 1;
 
 	maxFBO = currentFBO;
 
-	// Perform capture
-	panelCapturer_.captureAllPanels(g_panels, frameSender_->getFrameMap(), frameSender_->getMutex());
+	// Lock and capture
+	{
+		auto lock = frameSender_->lockFrames();
+		panelCapturer_.captureAllPanels(g_panels, frameSender_->frames());
+	}
 
 	return 1;
 }

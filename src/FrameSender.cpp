@@ -13,7 +13,8 @@
 #include <chrono>
 #include <lz4.h>
 
-FrameSender::FrameSender(UdpSender& sender) : udpSender_(sender) {}
+FrameSender::FrameSender(UdpSender& sender) : udpSender_(sender) {
+}
 
 FrameSender::~FrameSender() {
 	stop();
@@ -30,29 +31,17 @@ void FrameSender::stop() {
 		workerThread_.join();
 }
 
-std::unordered_map<uint16_t, RawPanelFrame>& FrameSender::getFrameMap() {
-	return latestFrames_;
-}
-
-std::mutex& FrameSender::getMutex() {
-	return framesMutex_;
-}
-
 void FrameSender::workerLoop() {
 	while (running_.load()) {
-		std::unordered_map<uint16_t, RawPanelFrame> frames;
+		std::unordered_map<uint16_t, RawPanelFrame> local;
 
-		// Swap out the latest frames
 		{
-			std::lock_guard<std::mutex> lock(framesMutex_);
-			frames = latestFrames_;
-			latestFrames_.clear();
+			std::lock_guard<std::mutex> lock(frameBuffer_.mtx);
+			std::swap(local, frameBuffer_.frames);
 		}
 
-		// Compress and send each frame
-		for (auto& [panelID, frame] : frames) compressAndSendPanel(frame);
+		for (auto& [id, frame] : local) compressAndSendPanel(frame);
 
-		// Avoid busy‑looping
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }

@@ -15,6 +15,11 @@
 #include "RawPanelFrame.h"
 #include "UdpSender.h"
 
+struct FrameBuffer {
+	std::mutex mtx;
+	std::unordered_map<uint16_t, RawPanelFrame> frames;
+};
+
 /**
  * @brief Worker thread that compresses and transmits panel frames.
  */
@@ -26,8 +31,14 @@ class FrameSender {
 	void start();
 	void stop();
 
-	std::unordered_map<uint16_t, RawPanelFrame>& getFrameMap();
-	std::mutex& getMutex();
+	// Kombinierter Zugriff
+	std::unique_lock<std::mutex> lockFrames() {
+		return std::unique_lock<std::mutex>(frameBuffer_.mtx);
+	}
+
+	std::unordered_map<uint16_t, RawPanelFrame>& frames() {
+		return frameBuffer_.frames;
+	}
 
   private:
 	void workerLoop();
@@ -37,8 +48,6 @@ class FrameSender {
 	std::atomic<bool> running_{false};
 	std::thread workerThread_;
 
-	std::unordered_map<uint16_t, RawPanelFrame> latestFrames_;
-	std::mutex framesMutex_;
-
+	FrameBuffer frameBuffer_;
 	uint32_t frameCounter_ = 0;
 };

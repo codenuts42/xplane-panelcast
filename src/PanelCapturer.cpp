@@ -39,37 +39,27 @@ void PanelCapturer::initOrResizePanelPBOs(uint16_t panelID, int w, int h) {
 	st.h = h;
 }
 
-void PanelCapturer::captureSinglePanel(const PanelROI& roi, std::unordered_map<uint16_t, RawPanelFrame>& outFrames,
-                                       std::mutex& outMutex) {
-	int w = roi.w;
-	int h = roi.h;
-
+void PanelCapturer::captureSinglePanel(const PanelROI& roi, std::unordered_map<uint16_t, RawPanelFrame>& outFrames) {
 	auto& st = panelStates_[roi.panelID];
-	initOrResizePanelPBOs(roi.panelID, w, h);
+	initOrResizePanelPBOs(roi.panelID, roi.w, roi.h);
 
 	int next = (st.pboIndex + 1) % 2;
 
-	// 1. Issue GPU readback into current PBO
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, st.pbo[st.pboIndex]);
-	glReadPixels(roi.x, roi.y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glReadPixels(roi.x, roi.y, roi.w, roi.h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-	// 2. Map previous PBO to retrieve completed data
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, st.pbo[next]);
 	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 
 	if (ptr) {
 		RawPanelFrame frame;
 		frame.panelID = roi.panelID;
-		frame.width = w;
-		frame.height = h;
-		frame.pixels.resize(w * h * 4);
+		frame.width = roi.w;
+		frame.height = roi.h;
+		frame.pixels.resize(roi.w * roi.h * 4);
 
-		memcpy(frame.pixels.data(), ptr, w * h * 4);
-
-		{
-			std::lock_guard<std::mutex> lock(outMutex);
-			outFrames[roi.panelID] = std::move(frame);
-		}
+		memcpy(frame.pixels.data(), ptr, roi.w * roi.h * 4);
+		outFrames[roi.panelID] = std::move(frame);
 
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
@@ -79,6 +69,6 @@ void PanelCapturer::captureSinglePanel(const PanelROI& roi, std::unordered_map<u
 }
 
 void PanelCapturer::captureAllPanels(const std::vector<PanelROI>& rois,
-                                     std::unordered_map<uint16_t, RawPanelFrame>& outFrames, std::mutex& outMutex) {
-	for (const auto& roi : rois) captureSinglePanel(roi, outFrames, outMutex);
+                                     std::unordered_map<uint16_t, RawPanelFrame>& outFrames) {
+	for (const auto& roi : rois) captureSinglePanel(roi, outFrames);
 }

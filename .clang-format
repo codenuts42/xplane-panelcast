@@ -13,7 +13,7 @@ PointerAlignment: Left
 
 #AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
-AllowShortFunctionsOnASingleLine: Inline
+AllowShortFunctionsOnASingleLine: false
 AllowShortBlocksOnASingleLine: true
 
 # Moderne C++-Listenformatierung

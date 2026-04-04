@@ -6,7 +6,8 @@
 
 class Logger {
   public:
-	explicit Logger(std::string prefix) : prefix_(std::move(prefix)) {}
+	explicit Logger(std::string prefix) : prefix_(std::move(prefix)) {
+	}
 
 	template <typename... Args> void log(std::string_view fmt, Args&&... args) const {
 		std::string msg = std::format("{} {}", prefix_, std::vformat(fmt, std::make_format_args(args...)));
