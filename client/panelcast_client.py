@@ -101,11 +101,15 @@ def assemble_and_show(panelID):
 
 print("Multi-Panel-Client läuft…")
 
-while True:
-    try:
-        data, addr = sock.recvfrom(2000)
-    except socket.timeout:
-        print("Timeout – keine Daten empfangen")
-        continue
+try:
+    while True:
+        try:
+            data, addr = sock.recvfrom(2000)
+        except socket.timeout:
+            print("Timeout – keine Daten empfangen")
+            continue
 
-    handle_fragment(data)
+        handle_fragment(data)
+
+except KeyboardInterrupt:
+    print("Beendet...")
