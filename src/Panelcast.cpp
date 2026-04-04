@@ -27,6 +27,7 @@
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #include "Logger.h"
@@ -39,49 +40,19 @@
 Logger logger("[Panelcast]");
 
 // =====================================================================
-// ROI‑Variablen (werden per DataRef gesetzt)
+// ROI Panels
 // =====================================================================
-static int roi_x = 5;
-static int roi_y = 1543;
-static int roi_w = 1015;
-static int roi_h = 500;
+struct PanelROI {
+	uint16_t panelID;
+	int x, y;
+	int w, h;
+};
 
-// =====================================================================
-// DataRefs
-// =====================================================================
-static XPLMDataRef dr_roi_x = nullptr;
-static XPLMDataRef dr_roi_y = nullptr;
-static XPLMDataRef dr_roi_w = nullptr;
-static XPLMDataRef dr_roi_h = nullptr;
-
-// Getter/Setter
-int get_roi_x(void*) {
-	return roi_x;
-}
-void set_roi_x(void*, int v) {
-	roi_x = v;
-}
-
-int get_roi_y(void*) {
-	return roi_y;
-}
-void set_roi_y(void*, int v) {
-	roi_y = v;
-}
-
-int get_roi_w(void*) {
-	return roi_w;
-}
-void set_roi_w(void*, int v) {
-	roi_w = v;
-}
-
-int get_roi_h(void*) {
-	return roi_h;
-}
-void set_roi_h(void*, int v) {
-	roi_h = v;
-}
+static std::vector<PanelROI> g_panels = {
+    {0, 5, 1543, 500, 500},  // PFD
+    {1, 515, 1543, 500, 500} //, // ND
+    //{2, 100, 950, 600, 400}, // EICAS
+};
 
 // =====================================================================
 // PBO
@@ -98,14 +69,15 @@ static int g_pboHeight = 0;
 static int g_sock = -1;
 static sockaddr_in g_destAddr;
 
-struct RawFrame {
-	std::vector<char> pixels; // RGBA8
-	int width = 0;
-	int height = 0;
+struct RawPanelFrame {
+	uint16_t panelID;
+	int width;
+	int height;
+	std::vector<char> pixels;
 };
 
 static std::mutex g_rawMutex;
-static std::queue<RawFrame> g_rawQueue;
+static std::unordered_map<uint16_t, RawPanelFrame> g_latestFrames;
 
 static std::atomic<bool> g_running{false};
 static std::thread g_workerThread;
@@ -145,187 +117,172 @@ static void closeUDP() {
 // =====================================================================
 // PBO initialisieren / neu anpassen
 // =====================================================================
+struct PanelCaptureState {
+	GLuint pbo[2] = {0, 0};
+	int pboIndex = 0;
+	bool initialized = false;
+	int w = 0;
+	int h = 0;
+};
 
-static void initOrResizePBOs(int w, int h) {
-	if (w <= 0 || h <= 0)
+static std::unordered_map<uint16_t, PanelCaptureState> g_panelState;
+
+static void initOrResizePanelPBOs(uint16_t panelID, int w, int h) {
+	auto& st = g_panelState[panelID];
+
+	if (st.initialized && st.w == w && st.h == h)
 		return;
 
-	if (g_pboInitialized && w == g_pboWidth && h == g_pboHeight)
-		return;
-
-	if (g_pboInitialized) {
-		glDeleteBuffers(2, g_pbo);
-		g_pboInitialized = false;
+	// Alte PBOs löschen
+	if (st.initialized) {
+		glDeleteBuffers(2, st.pbo);
 	}
 
-	const size_t size = (size_t)w * h * 4;
+	glGenBuffers(2, st.pbo);
 
-	glGenBuffers(2, g_pbo);
 	for (int i = 0; i < 2; i++) {
-		glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[i]);
-		glBufferData(GL_PIXEL_PACK_BUFFER, size, nullptr, GL_STREAM_READ);
+		glBindBuffer(GL_PIXEL_PACK_BUFFER, st.pbo[i]);
+		glBufferData(GL_PIXEL_PACK_BUFFER, w * h * 4, nullptr, GL_STREAM_READ);
 	}
+
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
 
-	g_pboInitialized = true;
-	g_pboWidth = w;
-	g_pboHeight = h;
-
-	logger.log("PBOs initialized/resized to %dx%d", w, h);
+	st.pboIndex = 0;
+	st.initialized = true;
+	st.w = w;
+	st.h = h;
 }
 
 // =====================================================================
-// Kompression + Queue
+// Capture
 // =====================================================================
 
-static void enqueueRawFrame(const unsigned char* ptr, int w, int h) {
-	if (!ptr || w <= 0 || h <= 0)
+static void captureSinglePanel(const PanelROI& roi) {
+	int w = roi.w;
+	int h = roi.h;
+
+	auto& st = g_panelState[roi.panelID];
+
+	initOrResizePanelPBOs(roi.panelID, w, h);
+	if (!st.initialized)
 		return;
 
-	const int rawSize = w * h * 4;
+	int next = (st.pboIndex + 1) % 2;
 
-	RawFrame f;
-	f.width = w;
-	f.height = h;
-	f.pixels.resize(rawSize);
-	memcpy(f.pixels.data(), ptr, rawSize);
+	// 1. Frame in PBO schreiben
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, st.pbo[st.pboIndex]);
+	glReadPixels(roi.x, roi.y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-	{
-		std::lock_guard<std::mutex> lock(g_rawMutex);
-
-		// Queue auf Größe 1 halten → alte Frames verwerfen
-		while (!g_rawQueue.empty()) g_rawQueue.pop();
-
-		g_rawQueue.push(std::move(f));
-	}
-}
-
-static void capturePanelRegion() {
-	int x = roi_x;
-	int y = roi_y;
-	int w = roi_w;
-	int h = roi_h;
-
-	if (w <= 0 || h <= 0)
-		return;
-
-	initOrResizePBOs(w, h);
-	if (!g_pboInitialized)
-		return;
-
-	int next = (g_pboIndex + 1) % 2;
-
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[g_pboIndex]);
-	glReadPixels(x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-
-	glBindBuffer(GL_PIXEL_PACK_BUFFER, g_pbo[next]);
+	// 2. Vorherigen PBO auslesen
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, st.pbo[next]);
 	unsigned char* ptr = (unsigned char*)glMapBuffer(GL_PIXEL_PACK_BUFFER, GL_READ_ONLY);
 
 	if (ptr) {
-		enqueueRawFrame(ptr, w, h);
+		RawPanelFrame f;
+		f.panelID = roi.panelID;
+		f.width = w;
+		f.height = h;
+		f.pixels.resize(w * h * 4);
+		memcpy(f.pixels.data(), ptr, w * h * 4);
+
+		{
+			std::lock_guard<std::mutex> lock(g_rawMutex);
+			g_latestFrames[roi.panelID] = std::move(f);
+		}
+
 		glUnmapBuffer(GL_PIXEL_PACK_BUFFER);
 	}
 
 	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-	g_pboIndex = next;
+	st.pboIndex = next;
+}
+
+static void captureAllPanels() {
+	for (const auto& p : g_panels) { captureSinglePanel(p); }
 }
 
 // =====================================================================
 // Frame senden
 // =====================================================================
 
-struct FrameHeader {
+struct PanelFragmentHeader {
 	uint32_t magic;
 	uint32_t frameID;
+	uint16_t panelID;
 	uint16_t fragIndex;
 	uint16_t fragCount;
+	uint16_t panelCount; // optional
 	uint32_t payloadSize;
-	uint32_t width;
-	uint32_t height;
-	uint32_t rawSize;
+	uint16_t width;
+	uint16_t height;
 	uint32_t compressedSize;
 };
 
-static void sendCompressedFrame(const char* compData, int compSize, int w, int h, uint32_t frameID) {
-	if (compSize <= 0)
-		return;
+static void sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* compData, int compSize, int w, int h) {
+	const int headerSize = sizeof(PanelFragmentHeader);
+	const int maxPayload = 1472 - headerSize; // optimale MTU
 
-	const int rawSize = w * h * 4;
-
-	const int headerSize = sizeof(FrameHeader);
-	const int maxPayload = 1440; // optimale MTU
 	int fragCount = (compSize + maxPayload - 1) / maxPayload;
 
-	FrameHeader hdr;
+	PanelFragmentHeader hdr;
 	hdr.magic = 0xABCD1234;
 	hdr.frameID = frameID;
-	hdr.fragCount = (uint16_t)fragCount;
+	hdr.panelID = panelID;
+	hdr.fragCount = fragCount;
 	hdr.width = w;
 	hdr.height = h;
-	hdr.rawSize = rawSize;
 	hdr.compressedSize = compSize;
 
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
 		int chunkSize = std::min(maxPayload, compSize - offset);
 
-		hdr.fragIndex = (uint16_t)i;
-		hdr.payloadSize = (uint32_t)chunkSize;
+		hdr.fragIndex = i;
+		hdr.payloadSize = chunkSize;
 
 		WSABUF bufs[2];
-
-		// Header (keine Kopie)
 		bufs[0].buf = (CHAR*)&hdr;
 		bufs[0].len = headerSize;
-
-		// Payload (keine Kopie)
 		bufs[1].buf = (CHAR*)(compData + offset);
 		bufs[1].len = chunkSize;
 
 		DWORD sent = 0;
-
-		//  zwei Buffer → Scatter/Gather
-		int r = WSASendTo(g_sock, bufs, 2, &sent, 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr), NULL, NULL);
-
-		if (r == SOCKET_ERROR) {
-			int err = WSAGetLastError();
-			logger.log("WSASendTo ERROR %d", err);
-		}
+		WSASendTo(g_sock, bufs, 2, &sent, 0, (sockaddr*)&g_destAddr, sizeof(g_destAddr), NULL, NULL);
 	}
+}
+
+static void compressAndSendPanel(const RawPanelFrame& f) {
+	int rawSize = f.width * f.height * 4;
+
+	int maxComp = LZ4_compressBound(rawSize);
+	std::vector<char> comp(maxComp);
+
+	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
+
+	if (compSize <= 0)
+		return;
+
+	comp.resize(compSize);
+
+	uint32_t frameID = g_frameCounter++;
+
+	sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
 }
 
 static void workerThreadLoop() {
 	while (g_running.load()) {
-		RawFrame frame;
+
+		std::unordered_map<uint16_t, RawPanelFrame> frames;
 
 		{
 			std::lock_guard<std::mutex> lock(g_rawMutex);
-			if (!g_rawQueue.empty()) {
-				frame = std::move(g_rawQueue.front());
-				g_rawQueue.pop();
-			}
+			frames = g_latestFrames;
+			g_latestFrames.clear();
 		}
 
-		if (!frame.pixels.empty()) {
-			int w = frame.width;
-			int h = frame.height;
-			int rawSize = (int)frame.pixels.size();
+		for (auto& [panelID, frame] : frames) { compressAndSendPanel(frame); }
 
-			int maxComp = LZ4_compressBound(rawSize);
-			std::vector<char> comp(maxComp);
-
-			int compSize = LZ4_compress_fast(frame.pixels.data(), comp.data(), rawSize, maxComp, 8);
-
-			if (compSize <= 0) {
-				logger.log("LZ4 ERROR");
-			} else {
-				comp.resize(compSize);
-				uint32_t frameID = g_frameCounter++;
-				sendCompressedFrame(comp.data(), compSize, w, h, frameID);
-			}
-		} else {
-			std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
@@ -342,7 +299,7 @@ static int drawCallback(XPLMDrawingPhase inPhase, int inIsBefore, void* inRefcon
 		return 1;
 	maxFBO = currentFBO;
 
-	capturePanelRegion();
+	captureAllPanels();
 	return 1;
 }
 
@@ -354,23 +311,6 @@ PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 	std::strcpy(outName, "Panelcast");
 	std::strcpy(outSig, "de.codenuts.panelcast");
 	std::strcpy(outDesc, "Streaming eines Panel‑Ausschnitts über Netzwerk.");
-
-	// DataRefs registrieren
-	dr_roi_x =
-	    XPLMRegisterDataAccessor("panelcast/roi_x", xplmType_Int, 1, get_roi_x, set_roi_x, nullptr, nullptr, nullptr,
-	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-
-	dr_roi_y =
-	    XPLMRegisterDataAccessor("panelcast/roi_y", xplmType_Int, 1, get_roi_y, set_roi_y, nullptr, nullptr, nullptr,
-	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-
-	dr_roi_w =
-	    XPLMRegisterDataAccessor("panelcast/roi_w", xplmType_Int, 1, get_roi_w, set_roi_w, nullptr, nullptr, nullptr,
-	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
-
-	dr_roi_h =
-	    XPLMRegisterDataAccessor("panelcast/roi_h", xplmType_Int, 1, get_roi_h, set_roi_h, nullptr, nullptr, nullptr,
-	                             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 
 	initUDP("127.0.0.1", 5000);
 
