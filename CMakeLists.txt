@@ -1,130 +1,126 @@
 cmake_minimum_required(VERSION 3.16)
-project(Panelcast LANGUAGES C CXX)
 
-# ---------------------------------------------------------
-#  COMPILER SETTINGS
-# ---------------------------------------------------------
+project(Panelcast
+    VERSION 1.0
+    LANGUAGES C CXX
+)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# ---------------------------------------------------------
-#  CLANG OPTIMIZATIONS
-# ---------------------------------------------------------
+# ============================================================
+# LZ4 via FetchContent (manually build library)
+# ============================================================
+include(FetchContent)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+FetchContent_Declare(
+    lz4
+    GIT_REPOSITORY https://github.com/lz4/lz4.git
+    GIT_TAG        v1.10.0
+)
+FetchContent_MakeAvailable(lz4)
 
-    message(STATUS "Building with Clang optimizations")
+# Build LZ4 manually (the official repo does NOT export targets)
+add_library(lz4 STATIC
+    ${lz4_SOURCE_DIR}/lib/lz4.c
+    ${lz4_SOURCE_DIR}/lib/lz4hc.c
+)
 
-    add_compile_options(
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wno-unused-parameter
-        -Wno-unused-variable
-        -Wno-deprecated-declarations
-        -Wno-language-extension-token
-        -Wno-missing-field-initializers
-    )
+target_include_directories(lz4 PUBLIC
+    ${lz4_SOURCE_DIR}/lib
+)
 
-    # Release optimizations
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math -fstrict-aliasing -funroll-loops -flto")
-    set(CMAKE_C_FLAGS_RELEASE   "-O3 -ffast-math -fstrict-aliasing -funroll-loops -flto")
+# ============================================================
+# GLAD (generiert)
+# ============================================================
+add_library(glad STATIC
+    third_party/glad/src/glad.c
+)
 
-    # Debug flags
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -fno-omit-frame-pointer")
-    set(CMAKE_C_FLAGS_DEBUG   "-O0 -g -fno-omit-frame-pointer")
+target_include_directories(glad PUBLIC
+    third_party/glad/include
+)
 
-    # LTO
-    set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "-flto")
+# ============================================================
+# Source files
+# ============================================================
+set(SRC_FILES
+    src/Panelcast.cpp
+    src/PanelcastPlugin.cpp
+    src/UdpSender.cpp
+    src/PanelCapturer.cpp
+    src/FrameSender.cpp
+)
 
-endif()
+set(HDR_FILES
+    src/PanelROI.h
+    src/RawPanelFrame.h
+    src/UdpSender.h
+    src/PanelCapturer.h
+    src/FrameSender.h
+    src/PanelcastPlugin.h
+)
 
-# ---------------------------------------------------------
-#  INCLUDE DIRECTORIES
-# ---------------------------------------------------------
-
+# ============================================================
+# Include directories
+# ============================================================
 include_directories(
     ${CMAKE_SOURCE_DIR}/SDK/CHeaders/XPLM
     ${CMAKE_SOURCE_DIR}/SDK/CHeaders/Widgets
-    ${CMAKE_SOURCE_DIR}/third_party
+    ${lz4_SOURCE_DIR}/lib
+    third_party/glad/include
 )
 
-# ---------------------------------------------------------
-#  DEFINES
-# ---------------------------------------------------------
+# ============================================================
+# Platform libs + X‑Plane platform defines
+# ============================================================
+if(WIN32)
+    add_definitions(-DWIN32_LEAN_AND_MEAN -DNOMINMAX)
+    add_definitions(-DIBM)
+    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+    set(PLATFORM_LIBS ws2_32 opengl32)
+    set(XPLM_LIBS
+        ${XPLANE_SDK_PATH}/Libraries/Win/XPLM_64.lib
+        ${XPLANE_SDK_PATH}/Libraries/Win/XPWidgets_64.lib
+    )
 
-add_compile_definitions(
-    WIN32
-    _WINDOWS
-    _USRDLL
-    SIMDATA_EXPORTS
-    IBM=1
-    XPLM200=1
-    XPLM210=1
-    XPLM300=1
-    XPLM301=1
-    _CRT_SECURE_NO_WARNINGS
-)
+elseif(APPLE)
+    add_definitions(-DAPL)
+    find_library(COCOA Cocoa)
+    find_library(OpenGL OpenGL)
+    set(PLATFORM_LIBS ${COCOA} ${OpenGL} pthread)
 
-# ---------------------------------------------------------
-#  SOURCES
-# ---------------------------------------------------------
+else() # Linux
+    add_definitions(-DLIN)
+    set(PLATFORM_LIBS GL pthread)
+endif()
 
-set(SOURCES
-    src/Panelcast.cpp
-    third_party/glad/glad.c
-    third_party/lz4/lz4.c
-    third_party/lz4/lz4frame.c
-    third_party/lz4/lz4hc.c
-    third_party/lz4/xxhash.c
-)
-
-# ---------------------------------------------------------
-#  PLUGIN (DLL)
-# ---------------------------------------------------------
-
-add_library(Panelcast SHARED ${SOURCES})
-
-set_target_properties(Panelcast PROPERTIES
-    OUTPUT_NAME "win"
-    SUFFIX ".xpl"
-)
-
-# ---------------------------------------------------------
-#  LINKING
-# ---------------------------------------------------------
-
-target_link_directories(Panelcast PRIVATE
-    ${CMAKE_SOURCE_DIR}/SDK/Libraries/Win
+# ============================================================
+# Plugin target
+# ============================================================
+add_library(Panelcast SHARED
+    ${SRC_FILES}
+    ${HDR_FILES}
 )
 
 target_link_libraries(Panelcast
-    XPLM_64
-    XPWidgets_64
-    opengl32
-    user32
-    kernel32
-    gdi32
-    winspool
-    shell32
-    ole32
-    oleaut32
-    uuid
-    comdlg32
-    advapi32
+    glad
+    lz4
+    ${XPLM_LIBS}
+    ${PLATFORM_LIBS}
 )
 
-# ---------------------------------------------------------
-#  INSTALL TO X-PLANE
-# ---------------------------------------------------------
+set_target_properties(Panelcast PROPERTIES
+    PREFIX ""
+    SUFFIX ".xpl"
+)
 
-set(XPLANE_PLUGIN_DIR "C:/X-Plane 12/Resources/plugins/Panelcast")
+# ============================================================
+# Installation directory
+# ============================================================
+set(PLUGIN_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/dist/Panelcast")
 
-add_custom_command(TARGET Panelcast POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        "${XPLANE_PLUGIN_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy
-        "$<TARGET_FILE:Panelcast>"
-        "${XPLANE_PLUGIN_DIR}/win.xpl"
+install(TARGETS Panelcast
+    RUNTIME DESTINATION ${PLUGIN_OUTPUT_DIR}
+    LIBRARY DESTINATION ${PLUGIN_OUTPUT_DIR}
 )
