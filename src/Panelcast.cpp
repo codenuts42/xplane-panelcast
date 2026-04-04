@@ -2,12 +2,10 @@
  * @file Panelcast.cpp
  * @brief X‑Plane plugin entry points for the Panelcast plugin.
  *
- * This file contains only the required C‑style entry functions that X‑Plane
- * uses to load, start, stop, enable and disable the plugin. All actual logic
- * is implemented inside PanelcastPlugin.
+ * This file contains the C‑style entry functions required by the X‑Plane SDK.
+ * All actual plugin logic is implemented inside PanelcastPlugin.
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
 
 #include "PanelcastPlugin.h"
@@ -16,7 +14,7 @@
 /**
  * @brief Called once when X‑Plane loads the plugin.
  *
- * Must return 1 on success, otherwise X‑Plane will refuse to load the plugin.
+ * Must return 1 on success, otherwise X‑Plane refuses to load the plugin.
  */
 PLUGIN_API int XPluginStart(char* outName, char* outSig, char* outDesc) {
 	std::strcpy(outName, "Panelcast");

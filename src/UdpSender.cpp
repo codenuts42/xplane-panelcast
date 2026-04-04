@@ -2,11 +2,10 @@
  * @file UdpSender.cpp
  * @brief Implementation of the UDP transmission backend for Panelcast.
  *
- * Handles platform‑independent UDP socket creation and sending of fragmented
+ * Handles platform-independent UDP socket creation and sending of fragmented
  * compressed panel frames. Used by FrameSender.
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
 
 #include "UdpSender.h"
@@ -67,13 +66,16 @@ struct PanelFragmentHeader {
 	uint32_t compressedSize;
 };
 
+/**
+ * @brief Splits a compressed frame into MTU-sized fragments and sends them.
+ */
 void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* data, int size, int w, int h) {
 	if (socket_ < 0)
 		return;
 
 	const int mtu = 1472;
 	const int headerSize = sizeof(PanelFragmentHeader);
-	const int maxPayload = mtu - headerSize; // safe MTU
+	const int maxPayload = mtu - headerSize;
 
 	int fragCount = (size + maxPayload - 1) / maxPayload;
 

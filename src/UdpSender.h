@@ -1,11 +1,13 @@
 /**
  * @file UdpSender.h
- * @brief UDP transmission backend for sending compressed panel frames.
+ * @brief UDP backend for transmitting compressed panel frames.
  *
- * Provides platform‑independent UDP socket handling for Windows and POSIX.
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * The UdpSender handles platform‑independent UDP socket creation and sends
+ * fragmented LZ4‑compressed panel frames to a remote receiver.
+ *
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
+
 #pragma once
 #include "RawPanelFrame.h"
 #include <cstdint>
@@ -20,6 +22,9 @@
 
 /**
  * @brief Handles UDP socket creation and transmission of fragmented panel data.
+ *
+ * Frames are split into MTU‑sized fragments, each prefixed with a header
+ * containing metadata required for reassembly on the receiver side.
  */
 class UdpSender {
   public:

@@ -1,16 +1,18 @@
 /**
  * @file RawPanelFrame.h
- * @brief Contains the raw framebuffer data captured from a panel ROI.
+ * @brief Contains raw RGBA framebuffer data captured from a panel ROI.
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
+
 #pragma once
 #include <cstdint>
 #include <vector>
 
 /**
- * @brief Raw RGBA framebuffer data for a single panel capture.
+ * @brief Raw framebuffer data for a single captured panel region.
+ *
+ * The pixel buffer contains uncompressed RGBA8 data in row‑major order.
  */
 struct RawPanelFrame {
 	uint16_t panelID;

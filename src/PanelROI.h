@@ -1,15 +1,18 @@
 /**
  * @file PanelROI.h
- * @brief Defines the rectangular regions of interest (ROIs) used for panel capture.
+ * @brief Defines rectangular regions of interest (ROIs) for panel capture.
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
+
 #pragma once
 #include <cstdint>
 
 /**
  * @brief Describes a rectangular capture region on the X‑Plane panel.
+ *
+ * Each ROI identifies a panel by ID and specifies the pixel coordinates
+ * and dimensions of the region to be captured.
  */
 struct PanelROI {
 	uint16_t panelID;

@@ -1,6 +1,6 @@
 /**
  * @file PanelcastPlugin.cpp
- * @brief High‑level integration of all Panelcast subsystems.
+ * @brief High-level integration of all Panelcast subsystems.
  *
  * Manages:
  *  - UDP networking
@@ -8,8 +8,7 @@
  *  - background compression/transmission
  *  - X‑Plane draw callback registration
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
 
 #include "PanelcastPlugin.h"
@@ -57,6 +56,7 @@ void PanelcastPlugin::stop() {
 int PanelcastPlugin::enable() {
 	return 1;
 }
+
 void PanelcastPlugin::disable() {
 }
 
@@ -64,6 +64,12 @@ int PanelcastPlugin::drawCallbackTrampoline(XPLMDrawingPhase inPhase, int inIsBe
 	return static_cast<PanelcastPlugin*>(refcon)->drawCallback();
 }
 
+/**
+ * @brief Draw callback executed during X‑Plane's gauge rendering phase.
+ *
+ * Captures panel ROIs from the highest framebuffer object (FBO) to avoid
+ * capturing intermediate rendering passes.
+ */
 int PanelcastPlugin::drawCallback() {
 	static GLint maxFBO = 0;
 	GLint currentFBO = 0;
@@ -74,7 +80,7 @@ int PanelcastPlugin::drawCallback() {
 
 	maxFBO = currentFBO;
 
-	// Lock and capture
+	// Capture framebuffer regions into FrameSender's buffer
 	{
 		auto lock = frameSender_->lockFrames();
 		panelCapturer_.captureAllPanels(g_panels, frameSender_->frames());

@@ -5,8 +5,7 @@
  * The worker thread periodically consumes raw framebuffer captures,
  * compresses them using LZ4, and sends them via UdpSender.
  *
- * Part of the Panelcast plugin for X‑Plane.
- * (c) 2025 Peter — All rights reserved.
+ * (c) 2025 Peter Vorwieger — All rights reserved.
  */
 
 #include "FrameSender.h"
@@ -31,21 +30,38 @@ void FrameSender::stop() {
 		workerThread_.join();
 }
 
+/**
+ * @brief Main worker loop.
+ *
+ * Pulls all pending frames from the shared buffer (swap-based, non-blocking),
+ * compresses each frame, and transmits it via UDP.
+ */
 void FrameSender::workerLoop() {
 	while (running_.load()) {
+
+		// Local buffer to avoid holding the mutex during compression
 		std::unordered_map<uint16_t, RawPanelFrame> local;
 
 		{
+			// Swap out all pending frames in one atomic operation
 			std::lock_guard<std::mutex> lock(frameBuffer_.mtx);
 			std::swap(local, frameBuffer_.frames);
 		}
 
-		for (auto& [id, frame] : local) compressAndSendPanel(frame);
+		// Process all captured frames
+		for (auto& [panelID, frame] : local) compressAndSendPanel(frame);
 
+		// Prevent busy-looping
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 }
 
+/**
+ * @brief Compresses a single panel frame and sends it via UDP.
+ *
+ * Uses LZ4_fast for high-speed compression. Frames are fragmented into MTU-sized
+ * UDP packets by UdpSender.
+ */
 void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 	int rawSize = f.width * f.height * 4;
 
@@ -55,7 +71,6 @@ void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 
 	// Compress raw RGBA data
 	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
-
 	if (compSize <= 0)
 		return;
 
@@ -63,6 +78,6 @@ void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 
 	uint32_t frameID = frameCounter_++;
 
-	// Send via UDP
+	// Transmit compressed frame
 	udpSender_.sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
 }
