@@ -31,6 +31,17 @@ target_include_directories(lz4 PUBLIC
 )
 
 # ============================================================
+# nlohmann/json via FetchContent
+# ============================================================
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.3
+)
+
+FetchContent_MakeAvailable(nlohmann_json)
+
+# ============================================================
 # GLAD (generiert)
 # ============================================================
 add_library(glad STATIC
@@ -106,6 +117,7 @@ add_library(Panelcast SHARED
 target_link_libraries(Panelcast
     glad
     lz4
+    nlohmann_json
     ${XPLM_LIBS}
     ${PLATFORM_LIBS}
 )
@@ -125,6 +137,10 @@ install(TARGETS Panelcast
     LIBRARY DESTINATION ${PLUGIN_OUTPUT_DIR}
 )
 
+install(FILES config/config.json
+    DESTINATION ${PLUGIN_OUTPUT_DIR}
+)
+
 # ---------------------------------------------------------
 #  INSTALL TO X-PLANE (Windows only)
 # ---------------------------------------------------------
@@ -138,6 +154,10 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy
             "$<TARGET_FILE:Panelcast>"
             "${XPLANE_PLUGIN_DIR}/win.xpl"
-        COMMENT "Installing Panelcast plugin to X-Plane directory"
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_SOURCE_DIR}/config/config.json"
+            "${XPLANE_PLUGIN_DIR}/config.json"
+        COMMENT "Installing Panelcast plugin and config.json to X-Plane directory"
     )
 endif()
+

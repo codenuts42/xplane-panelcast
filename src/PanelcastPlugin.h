@@ -85,4 +85,6 @@ class PanelcastPlugin {
 	UdpSender udpSender_;
 	PanelCapturer panelCapturer_;
 	std::unique_ptr<FrameSender> frameSender_;
+	std::vector<PanelROI> panels_;
+	std::unordered_map<std::string, uint16_t> panelNameToID_;
 };
