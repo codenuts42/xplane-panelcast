@@ -24,8 +24,8 @@ bool UdpSender::init(const char* ip, uint16_t port) {
 #endif
 
 	// Create UDP socket
-	socket = socket(AF_INET, SOCK_DGRAM, 0);
-	if (socket < 0)
+	socket_ = socket(AF_INET, SOCK_DGRAM, 0);
+	if (socket_ < 0)
 		return false;
 
 	// Configure destination address
@@ -38,14 +38,14 @@ bool UdpSender::init(const char* ip, uint16_t port) {
 }
 
 void UdpSender::close() {
-	if (socket >= 0) {
+	if (socket_ >= 0) {
 #ifdef _WIN32
-		closesocket(socket);
+		closesocket(socket_);
 		WSACleanup();
 #else
-		::close(socket);
+		::close(socket_);
 #endif
-		socket = -1;
+		socket_ = -1;
 	}
 }
 
@@ -68,7 +68,7 @@ struct PanelFragmentHeader {
 };
 
 void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* data, int size, int w, int h) {
-	if (socket < 0)
+	if (socket_ < 0)
 		return;
 
 	const int mtu = 1472;
@@ -100,6 +100,6 @@ void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const cha
 		memcpy(buffer + headerSize, data + offset, chunkSize);
 
 		// Transmit
-		sendto(socket, buffer, headerSize + chunkSize, 0, (sockaddr*)&destAddr, sizeof(destAddr));
+		sendto(socket_, buffer, headerSize + chunkSize, 0, (sockaddr*)&destAddr_, sizeof(destAddr_));
 	}
 }

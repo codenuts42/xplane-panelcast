@@ -39,5 +39,5 @@ class PanelCapturer {
 	void captureSinglePanel(const PanelROI& roi, std::unordered_map<uint16_t, RawPanelFrame>& outFrames,
 	                        std::mutex& outMutex);
 
-	std::unordered_map<uint16_t, PanelCaptureState> panelStates;
+	std::unordered_map<uint16_t, PanelCaptureState> panelStates_;
 };

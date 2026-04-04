@@ -33,12 +33,12 @@ class FrameSender {
 	void workerLoop();
 	void compressAndSendPanel(const RawPanelFrame& f);
 
-	UdpSender& udpSender;
-	std::atomic<bool> running{false};
-	std::thread workerThread;
+	UdpSender& udpSender_;
+	std::atomic<bool> running_{false};
+	std::thread workerThread_;
 
-	std::unordered_map<uint16_t, RawPanelFrame> latestFrames;
-	std::mutex framesMutex;
+	std::unordered_map<uint16_t, RawPanelFrame> latestFrames_;
+	std::mutex framesMutex_;
 
-	uint32_t frameCounter = 0;
+	uint32_t frameCounter_ = 0;
 };

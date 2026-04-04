@@ -1,31 +1,22 @@
 #pragma once
 #include "XPLMUtilities.h"
-#include <cstdarg>
-#include <cstdio>
+#include <format>
 #include <string>
+#include <string_view>
 
 class Logger {
-public:
-    explicit Logger(const char* prefix)
-        : prefix_(prefix) {}
+  public:
+	explicit Logger(std::string prefix) : prefix_(std::move(prefix)) {}
 
-    void log(const char* fmt, ...) const {
-        char buffer[512];
+	template <typename... Args> void log(std::string_view fmt, Args&&... args) const {
+		std::string msg = std::format("{} {}", prefix_, std::vformat(fmt, std::make_format_args(args...)));
 
-        int prefixLen = snprintf(buffer, sizeof(buffer), "%s ", prefix_);
+		if (!msg.ends_with('\n'))
+			msg.push_back('\n');
 
-        va_list args;
-        va_start(args, fmt);
-        vsnprintf(buffer + prefixLen, sizeof(buffer) - prefixLen, fmt, args);
-        va_end(args);
+		XPLMDebugString(msg.c_str());
+	}
 
-        std::string msg(buffer);
-        if (msg.back() != '\n')
-            msg.push_back('\n');
-
-        XPLMDebugString(msg.c_str());
-    }
-
-private:
-    const char* prefix_;
+  private:
+	std::string prefix_;
 };

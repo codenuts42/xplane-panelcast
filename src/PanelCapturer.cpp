@@ -13,7 +13,7 @@
 #include <cstring>
 
 void PanelCapturer::initOrResizePanelPBOs(uint16_t panelID, int w, int h) {
-	auto& st = panelStates[panelID];
+	auto& st = panelStates_[panelID];
 
 	// If already initialized with correct size, nothing to do
 	if (st.initialized && st.w == w && st.h == h)

@@ -41,7 +41,7 @@ class PanelcastPlugin {
 
 	int drawCallback();
 
-	UdpSender udpSender;
-	PanelCapturer panelCapturer;
-	std::unique_ptr<FrameSender> frameSender;
+	UdpSender udpSender_;
+	PanelCapturer panelCapturer_;
+	std::unique_ptr<FrameSender> frameSender_;
 };

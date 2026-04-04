@@ -80,8 +80,8 @@ if(WIN32)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
     set(PLATFORM_LIBS ws2_32 opengl32)
     set(XPLM_LIBS
-        ${XPLANE_SDK_PATH}/Libraries/Win/XPLM_64.lib
-        ${XPLANE_SDK_PATH}/Libraries/Win/XPWidgets_64.lib
+        ${CMAKE_SOURCE_DIR}/SDK/Libraries/Win/XPLM_64.lib
+        ${CMAKE_SOURCE_DIR}/SDK/Libraries/Win/XPWidgets_64.lib
     )
 
 elseif(APPLE)
@@ -124,3 +124,20 @@ install(TARGETS Panelcast
     RUNTIME DESTINATION ${PLUGIN_OUTPUT_DIR}
     LIBRARY DESTINATION ${PLUGIN_OUTPUT_DIR}
 )
+
+# ---------------------------------------------------------
+#  INSTALL TO X-PLANE (Windows only)
+# ---------------------------------------------------------
+
+if(WIN32)
+    set(XPLANE_PLUGIN_DIR "C:/X-Plane 12/Resources/plugins/Panelcast")
+
+    add_custom_command(TARGET Panelcast POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${XPLANE_PLUGIN_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "$<TARGET_FILE:Panelcast>"
+            "${XPLANE_PLUGIN_DIR}/win.xpl"
+        COMMENT "Installing Panelcast plugin to X-Plane directory"
+    )
+endif()

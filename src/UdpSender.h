@@ -32,6 +32,6 @@ class UdpSender {
 	void sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* compData, int compSize, int w, int h);
 
   private:
-	int socket = -1;
-	sockaddr_in destAddr{};
+	int socket_ = -1;
+	sockaddr_in destAddr_{};
 };

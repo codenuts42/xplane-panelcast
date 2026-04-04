@@ -28,14 +28,14 @@ PanelcastPlugin& PanelcastPlugin::instance() {
 }
 
 bool PanelcastPlugin::start() {
-	udpSender.init("127.0.0.1", 5000);
+	udpSender_.init("127.0.0.1", 5000);
 
 #ifdef _WIN32
 	gladLoadGL();
 #endif
 
-	frameSender = std::make_unique<FrameSender>(udpSender);
-	frameSender->start();
+	frameSender_ = std::make_unique<FrameSender>(udpSender_);
+	frameSender_->start();
 
 	// Register draw callback for panel capture
 	XPLMRegisterDrawCallback(drawCallbackTrampoline, xplm_Phase_Gauges, 0, this);
@@ -46,12 +46,12 @@ bool PanelcastPlugin::start() {
 void PanelcastPlugin::stop() {
 	XPLMUnregisterDrawCallback(drawCallbackTrampoline, xplm_Phase_Gauges, 0, this);
 
-	if (frameSender) {
-		frameSender->stop();
-		frameSender.reset();
+	if (frameSender_) {
+		frameSender_->stop();
+		frameSender_.reset();
 	}
 
-	udpSender.close();
+	udpSender_.close();
 }
 
 int PanelcastPlugin::enable() {
@@ -75,7 +75,7 @@ int PanelcastPlugin::drawCallback() {
 	maxFBO = currentFBO;
 
 	// Perform capture
-	panelCapturer.captureAllPanels(g_panels, frameSender->getFrameMap(), frameSender->getMutex());
+	panelCapturer_.captureAllPanels(g_panels, frameSender_->getFrameMap(), frameSender_->getMutex());
 
 	return 1;
 }

@@ -13,40 +13,40 @@
 #include <chrono>
 #include <lz4.h>
 
-FrameSender::FrameSender(UdpSender& sender) : udbSender(sender) {}
+FrameSender::FrameSender(UdpSender& sender) : udpSender_(sender) {}
 
 FrameSender::~FrameSender() {
 	stop();
 }
 
 void FrameSender::start() {
-	running.store(true);
-	workerThread = std::thread(&FrameSender::workerLoop, this);
+	running_.store(true);
+	workerThread_ = std::thread(&FrameSender::workerLoop, this);
 }
 
 void FrameSender::stop() {
-	running.store(false);
-	if (workerThread.joinable())
-		workerThread.join();
+	running_.store(false);
+	if (workerThread_.joinable())
+		workerThread_.join();
 }
 
 std::unordered_map<uint16_t, RawPanelFrame>& FrameSender::getFrameMap() {
-	return latestFrames;
+	return latestFrames_;
 }
 
 std::mutex& FrameSender::getMutex() {
-	return framesMutex;
+	return framesMutex_;
 }
 
 void FrameSender::workerLoop() {
-	while (running.load()) {
+	while (running_.load()) {
 		std::unordered_map<uint16_t, RawPanelFrame> frames;
 
 		// Swap out the latest frames
 		{
-			std::lock_guard<std::mutex> lock(framesMutex);
-			frames = latestFrames;
-			latestFrames.clear();
+			std::lock_guard<std::mutex> lock(framesMutex_);
+			frames = latestFrames_;
+			latestFrames_.clear();
 		}
 
 		// Compress and send each frame
@@ -72,8 +72,8 @@ void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 
 	comp.resize(compSize);
 
-	uint32_t frameID = frameCounter++;
+	uint32_t frameID = frameCounter_++;
 
 	// Send via UDP
-	sender.sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
+	udpSender_.sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
 }
