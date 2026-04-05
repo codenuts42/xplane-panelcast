@@ -62,5 +62,5 @@ class FrameSender {
 	std::thread workerThread_;
 
 	FrameBuffer frameBuffer_;
-	uint32_t frameCounter_ = 0;
+	std::unordered_map<uint16_t, uint32_t> frameCounters_;
 };

@@ -5,7 +5,7 @@ project(Panelcast
     LANGUAGES C CXX
 )
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ============================================================
@@ -56,6 +56,7 @@ target_include_directories(glad PUBLIC
 # Source files
 # ============================================================
 set(SRC_FILES
+    src/ConfigManager.cpp
     src/Panelcast.cpp
     src/PanelcastPlugin.cpp
     src/UdpSender.cpp
@@ -64,6 +65,7 @@ set(SRC_FILES
 )
 
 set(HDR_FILES
+    src/ConfigManager.h
     src/PanelROI.h
     src/RawPanelFrame.h
     src/UdpSender.h

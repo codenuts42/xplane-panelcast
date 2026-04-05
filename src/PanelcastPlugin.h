@@ -1,6 +1,6 @@
 /**
  * @file PanelcastPlugin.h
- * @brief High‑level controller integrating all subsystems of the Panelcast plugin.
+ * @brief High-level controller integrating all subsystems of the Panelcast plugin.
  *
  * The PanelcastPlugin class manages the lifecycle of the X‑Plane plugin and
  * coordinates the following subsystems:
@@ -10,22 +10,24 @@
  *  - background compression and transmission (FrameSender)
  *  - X‑Plane draw callback registration
  *
- * This class acts as the central façade for the entire plugin.
+ * This class acts as the central facade for the entire plugin.
  *
  * (c) 2025 Peter Vorwieger — All rights reserved.
  */
 
 #pragma once
 #include <memory>
-#include <vector>
 
+#include "ConfigManager.h"
 #include "FrameSender.h"
 #include "PanelCapturer.h"
-#include "PanelROI.h"
 #include "UdpSender.h"
+
 #include "XPLMDisplay.h"
+#include "XPLMGraphics.h"
 
 /**
+ * @class PanelcastPlugin
  * @brief Main façade class for the X‑Plane plugin lifecycle.
  *
  * Provides the required entry points for enabling, disabling, starting,
@@ -82,9 +84,9 @@ class PanelcastPlugin {
 	 */
 	int drawCallback();
 
-	UdpSender udpSender_;
-	PanelCapturer panelCapturer_;
-	std::unique_ptr<FrameSender> frameSender_;
-	std::vector<PanelROI> panels_;
-	std::unordered_map<std::string, uint16_t> panelNameToID_;
+  private:
+	ConfigManager config_;                     ///< Central configuration handler
+	UdpSender udpSender_;                      ///< UDP transmission backend
+	PanelCapturer panelCapturer_;              ///< Framebuffer capture helper
+	std::unique_ptr<FrameSender> frameSender_; ///< Background compression/transmission
 };

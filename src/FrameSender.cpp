@@ -76,7 +76,8 @@ void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 
 	comp.resize(compSize);
 
-	uint32_t frameID = frameCounter_++;
+	uint32_t& counter = frameCounters_[f.panelID];
+	uint32_t frameID = counter++;
 
 	// Transmit compressed frame
 	udpSender_.sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
