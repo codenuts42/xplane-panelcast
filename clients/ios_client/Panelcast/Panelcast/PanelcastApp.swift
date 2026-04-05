@@ -11,14 +11,14 @@ import SwiftUI
 struct PanelcastApp: App {
     @StateObject private var store = PanelStore()
     private var receiver: UDPReceiver!
-    
+
     init() {
         let store = PanelStore()
         _store = StateObject(wrappedValue: store)
         receiver = UDPReceiver(port: 5000, store: store)
         receiver.start()
     }
-    
+
     var body: some Scene {
         WindowGroup {
             ContentView()

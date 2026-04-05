@@ -5,7 +5,6 @@
 //  Created by Peter Vorwieger on 05.04.26.
 //
 
-
 import Foundation
 import UIKit
 
@@ -30,28 +29,28 @@ struct PanelHeader {
 
         func readU32() -> UInt32 {
             defer { offset += 4 }
-            return data.subdata(in: offset..<offset+4).withUnsafeBytes {
+            return data.subdata(in: offset..<offset + 4).withUnsafeBytes {
                 $0.load(as: UInt32.self)
             }.littleEndian
         }
 
         func readU16() -> UInt16 {
             defer { offset += 2 }
-            return data.subdata(in: offset..<offset+2).withUnsafeBytes {
+            return data.subdata(in: offset..<offset + 2).withUnsafeBytes {
                 $0.load(as: UInt16.self)
             }.littleEndian
         }
 
-        magic       = readU32()
-        frameID     = readU32()
-        panelID     = readU16()
-        fragIndex   = readU16()
-        fragCount   = readU16()
-        panelCount  = readU16()
+        magic = readU32()
+        frameID = readU32()
+        panelID = readU16()
+        fragIndex = readU16()
+        fragCount = readU16()
+        panelCount = readU16()
         payloadSize = readU32()
-        width       = readU16()
-        height      = readU16()
-        compSize    = readU32()
+        width = readU16()
+        height = readU16()
+        compSize = readU32()
     }
 }
 
@@ -60,7 +59,7 @@ final class UDPReceiver {
     private let store: PanelStore
     private var socketFD: Int32 = -1
 
-    // Panel‑State für Reassembly
+    /// Panel‑State für Reassembly
     struct PanelState {
         var frameID: UInt32 = 0
         var fragCount: UInt16 = 0
@@ -187,7 +186,8 @@ final class UDPReceiver {
                                       bitsPerComponent: 8,
                                       bytesPerRow: bytesPerRow,
                                       space: colorSpace,
-                                      bitmapInfo: bitmapInfo.rawValue) else {
+                                      bitmapInfo: bitmapInfo.rawValue)
+            else {
                 return nil
             }
 
@@ -209,7 +209,7 @@ final class UDPReceiver {
         let now = Date().timeIntervalSince1970
         stateQueue.async {
             let toRemove = self.states.filter { now - $0.value.lastSeen > timeout }
-                                      .map { $0.key }
+                .map { $0.key }
 
             guard !toRemove.isEmpty else { return }
 
@@ -225,4 +225,3 @@ final class UDPReceiver {
         }
     }
 }
-

@@ -5,9 +5,8 @@
 //  Created by Peter Vorwieger on 05.04.26.
 //
 
-
-import SwiftUI
 internal import Combine
+import SwiftUI
 
 final class PanelStore: ObservableObject {
     @Published var panels: [UInt16: PanelModel] = [:]

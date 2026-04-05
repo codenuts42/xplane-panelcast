@@ -5,11 +5,9 @@
 //  Created by Peter Vorwieger on 05.04.26.
 //
 
-
 import Foundation
 
 enum LZ4Swift {
-
     static func compress(_ data: Data) -> Data? {
         let maxSize = LZ4_compressBound(Int32(data.count))
         var output = Data(count: Int(maxSize))
