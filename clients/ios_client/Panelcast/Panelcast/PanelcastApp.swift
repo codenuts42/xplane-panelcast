@@ -22,6 +22,7 @@ struct PanelcastApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .statusBarHidden(true)
         }
     }
 }
