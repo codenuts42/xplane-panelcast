@@ -7,10 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D0DEC4DA2F82E807000110AE /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D52F82E807000110AE /* lz4.c */; };
-		D0DEC4DB2F82E807000110AE /* xxhash.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D92F82E807000110AE /* xxhash.c */; };
-		D0DEC4DC2F82E807000110AE /* lz4frame.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D72F82E807000110AE /* lz4frame.c */; };
-		D0DEC4E32F82EAD8000110AE /* lz4hc.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4E22F82EAD8000110AE /* lz4hc.c */; };
+		D0DB6E562F839DE000A9E245 /* lz4frame.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D72F82E807000110AE /* lz4frame.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		D0DB6E572F839DE000A9E245 /* xxhash.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D92F82E807000110AE /* xxhash.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		D0DB6E582F839DE000A9E245 /* lz4.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4D52F82E807000110AE /* lz4.c */; settings = {COMPILER_FLAGS = "-w"; }; };
+		D0DB6E592F839DE000A9E245 /* lz4hc.c in Sources */ = {isa = PBXBuildFile; fileRef = D0DEC4E22F82EAD8000110AE /* lz4hc.c */; settings = {COMPILER_FLAGS = "-w"; }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -163,10 +163,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D0DEC4E32F82EAD8000110AE /* lz4hc.c in Sources */,
-				D0DEC4DA2F82E807000110AE /* lz4.c in Sources */,
-				D0DEC4DB2F82E807000110AE /* xxhash.c in Sources */,
-				D0DEC4DC2F82E807000110AE /* lz4frame.c in Sources */,
+				D0DB6E562F839DE000A9E245 /* lz4frame.c in Sources */,
+				D0DB6E572F839DE000A9E245 /* xxhash.c in Sources */,
+				D0DB6E582F839DE000A9E245 /* lz4.c in Sources */,
+				D0DB6E592F839DE000A9E245 /* lz4hc.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
