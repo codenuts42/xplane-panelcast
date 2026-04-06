@@ -10,19 +10,18 @@ import SwiftUI
 @main
 struct PanelcastApp: App {
     @StateObject private var store: PanelStore
-    @StateObject private var receiverService: ReceiverService
+    @State private var receiverService: ReceiverService
 
     init() {
         let store = PanelStore()
         _store = StateObject(wrappedValue: store)
-        _receiverService = StateObject(wrappedValue: ReceiverService(store: store))
+        _receiverService = State(initialValue: ReceiverService(store: store))
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
-                .environmentObject(receiverService)
         }
     }
 }

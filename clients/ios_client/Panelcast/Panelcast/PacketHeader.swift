@@ -8,6 +8,9 @@
 import Foundation
 
 struct PacketHeader {
+    /// 4 + 4 + 2 + 2 + 2 + 2 + 4 + 2 + 2 + 4 = 28 Bytes
+    static let size = 28
+
     let magic: UInt32
     let frameID: UInt32
     let panelID: UInt16
@@ -19,34 +22,28 @@ struct PacketHeader {
     let height: UInt16
     let compSize: UInt32
 
-    static let size = 4 + 4 + 2 + 2 + 2 + 2 + 4 + 2 + 2 + 4
-
     init?(data: Data) {
         guard data.count >= PacketHeader.size else { return nil }
 
         var offset = 0
-        func readU32() -> UInt32 {
-            defer { offset += 4 }
-            return data.subdata(in: offset..<offset + 4)
-                .withUnsafeBytes { $0.load(as: UInt32.self) }
-                .littleEndian
-        }
-        func readU16() -> UInt16 {
-            defer { offset += 2 }
-            return data.subdata(in: offset..<offset + 2)
-                .withUnsafeBytes { $0.load(as: UInt16.self) }
-                .littleEndian
+
+        func read<T: FixedWidthInteger>(_ type: T.Type) -> T {
+            let value = data.withUnsafeBytes { ptr in
+                ptr.load(fromByteOffset: offset, as: T.self)
+            }
+            offset += MemoryLayout<T>.size
+            return T(littleEndian: value)
         }
 
-        magic = readU32()
-        frameID = readU32()
-        panelID = readU16()
-        fragIndex = readU16()
-        fragCount = readU16()
-        panelCount = readU16()
-        payloadSize = readU32()
-        width = readU16()
-        height = readU16()
-        compSize = readU32()
+        self.magic = read(UInt32.self)
+        self.frameID = read(UInt32.self)
+        self.panelID = read(UInt16.self)
+        self.fragIndex = read(UInt16.self)
+        self.fragCount = read(UInt16.self)
+        self.panelCount = read(UInt16.self)
+        self.payloadSize = read(UInt32.self)
+        self.width = read(UInt16.self)
+        self.height = read(UInt16.self)
+        self.compSize = read(UInt32.self)
     }
 }

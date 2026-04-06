@@ -14,18 +14,19 @@ struct ContentView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             LazyVGrid(
-                columns: [GridItem(.flexible()),
-                          GridItem(.flexible())],
+                columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ],
                 spacing: 16
             ) {
-                ForEach(Array(store.panels.values), id: \.id) { panel in
+                ForEach(store.panels.values.sorted(by: { $0.id < $1.id })) { panel in
                     PanelView(model: panel)
                         .frame(minHeight: 200)
-                        .background(Color.black.opacity(0.8))
                         .cornerRadius(8)
                 }
             }.padding()
-        }
+        }.statusBarHidden(true)
     }
 }
 
@@ -38,7 +39,10 @@ struct PanelView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .scaleEffect(x: 1, y: -1)
+                    .frame(
+                        maxWidth: image.size.width,
+                        maxHeight: image.size.height
+                    )
             } else {
                 Text("Panel \(model.id)\nWaiting for frames…")
                     .foregroundColor(.gray)

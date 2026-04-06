@@ -5,7 +5,7 @@
 //  Created by Peter Vorwieger on 05.04.26.
 //
 
-internal import Combine
+import Combine
 import SwiftUI
 
 final class PanelStore: ObservableObject {
