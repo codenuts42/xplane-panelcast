@@ -36,7 +36,7 @@ final class ReceiverService {
         {
             let uiImage = UIImage(cgImage: cgImage)
             let panel = store.panel(for: frame.panelID)
-            panel.image = uiImage
+            panel.updateImage(uiImage)
         }
     }
 }

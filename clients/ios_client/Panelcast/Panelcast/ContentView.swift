@@ -34,21 +34,26 @@ struct PanelView: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             if let image = model.image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(
-                        maxWidth: image.size.width,
-                        maxHeight: image.size.height
-                    )
             } else {
                 Text("Panel \(model.id)\nWaiting for frames…")
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
                     .padding()
             }
+
+            // 🔥 FPS Overlay
+            Text("\(model.fps) FPS")
+                .font(.caption)
+                .padding(6)
+                .background(Color.black.opacity(0.25))
+                .foregroundColor(.white)
+                .cornerRadius(4)
+                .padding(8)
         }
     }
 }
