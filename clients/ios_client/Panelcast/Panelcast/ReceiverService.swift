@@ -35,8 +35,7 @@ final class ReceiverService {
            let cgImage = ImageFactory.makeImage(width: width, height: height, raw: raw)
         {
             let uiImage = UIImage(cgImage: cgImage)
-            let panel = store.panel(for: frame.panelID)
-            panel.updateImage(uiImage)
+            store.receiveFrame(panelID: frame.panelID, image: uiImage)
         }
     }
 }

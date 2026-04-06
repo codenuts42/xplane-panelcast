@@ -13,20 +13,28 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ],
-                spacing: 16
-            ) {
-                ForEach(store.panels.values.sorted(by: { $0.id < $1.id })) { panel in
-                    PanelView(model: panel)
-                        .frame(minHeight: 200)
-                        .cornerRadius(8)
+
+            if store.panels.isEmpty {
+                Text("Waiting for panels…")
+                    .foregroundColor(.gray)
+                    .font(.title2)
+            } else {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ],
+                    spacing: 16
+                ) {
+                    ForEach(store.panels.values.sorted(by: { $0.id < $1.id })) { panel in
+                        PanelView(model: panel)
+                            .frame(minHeight: 200, maxHeight: 500)
+                            .cornerRadius(8)
+                    }
                 }
-            }.padding()
-        }.statusBarHidden(true)
+                .padding()
+            }
+        }
     }
 }
 
@@ -34,26 +42,15 @@ struct PanelView: View {
     @ObservedObject var model: PanelModel
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if let image = model.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                Text("Panel \(model.id)\nWaiting for frames…")
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-                    .padding()
-            }
-
-            // 🔥 FPS Overlay
-            Text("\(model.fps) FPS")
-                .font(.caption)
-                .padding(6)
-                .background(Color.black.opacity(0.25))
-                .foregroundColor(.white)
-                .cornerRadius(4)
-                .padding(8)
+        if let image = model.image {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+        } else {
+            Text("Panel \(model.id)\nWaiting for frames…")
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding()
         }
     }
 }
