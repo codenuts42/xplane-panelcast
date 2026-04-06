@@ -10,47 +10,45 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var store: PanelStore
 
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+    let spacing: CGFloat = 16
+    let minPanelWidth: CGFloat = 300 // Mindestbreite pro Panel
 
-            if store.panels.isEmpty {
-                Text("Waiting for panels…")
-                    .foregroundColor(.gray)
-                    .font(.title2)
-            } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible()),
-                        GridItem(.flexible())
-                    ],
-                    spacing: 16
-                ) {
-                    ForEach(store.panels.values.sorted(by: { $0.id < $1.id })) { panel in
-                        PanelView(model: panel)
-                            .frame(minHeight: 200, maxHeight: 500)
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                Color.black.ignoresSafeArea()
+
+                if store.panels.isEmpty {
+                    Text("Waiting for panels…")
+                        .foregroundColor(.gray)
+                        .font(.title2)
+                } else {
+                    let availableWidth = geo.size.width - 32
+                    let panelCount = store.panels.count
+                    let columnsCount = min(panelCount, Int(availableWidth / minPanelWidth))
+                    let rowsCount = min(1, panelCount / columnsCount)
+                    let maxPanelHeight = geo.size.height / Double(rowsCount)
+                    let columnWidth = (availableWidth - CGFloat(columnsCount - 1) * spacing)
+                        / CGFloat(columnsCount)
+
+                    let columns = Array(
+                        repeating: GridItem(.flexible(), spacing: spacing),
+                        count: columnsCount
+                    )
+
+                    LazyVGrid(columns: columns, spacing: spacing) {
+                        ForEach(store.panels.values.sorted(by: { $0.id < $1.id })) { panel in
+                            PanelView(
+                                model: panel,
+                                maxWidth: columnWidth,
+                                maxHeight: maxPanelHeight
+                            )
                             .cornerRadius(8)
+                        }
                     }
+                    .padding()
                 }
-                .padding()
             }
-        }
-    }
-}
-
-struct PanelView: View {
-    @ObservedObject var model: PanelModel
-
-    var body: some View {
-        if let image = model.image {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-        } else {
-            Text("Panel \(model.id)\nWaiting for frames…")
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding()
         }
     }
 }
