@@ -11,18 +11,21 @@ struct ContentView: View {
     @EnvironmentObject var store: PanelStore
 
     var body: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible()),
-                      GridItem(.flexible())],
-            spacing: 16
-        ) {
-            ForEach(Array(store.panels.values), id: \.id) { panel in
-                PanelView(model: panel)
-                    .frame(minHeight: 200)
-                    .background(Color.black.opacity(0.8))
-                    .cornerRadius(8)
-            }
-        }.padding()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            LazyVGrid(
+                columns: [GridItem(.flexible()),
+                          GridItem(.flexible())],
+                spacing: 16
+            ) {
+                ForEach(Array(store.panels.values), id: \.id) { panel in
+                    PanelView(model: panel)
+                        .frame(minHeight: 200)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(8)
+                }
+            }.padding()
+        }
     }
 }
 

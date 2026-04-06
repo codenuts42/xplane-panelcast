@@ -8,7 +8,8 @@
 import Foundation
 import UIKit
 
-// Header: <I I H H H H I H H I> (little endian)
+// MARK: - Header Struct
+
 struct PanelHeader {
     let magic: UInt32
     let frameID: UInt32
@@ -53,6 +54,8 @@ struct PanelHeader {
         compSize = readU32()
     }
 }
+
+// MARK: - UDP Receiver
 
 final class UDPReceiver {
     private let port: UInt16
@@ -127,7 +130,6 @@ final class UDPReceiver {
         let width = Int(hdr.width)
         let height = Int(hdr.height)
         let payloadSize = Int(hdr.payloadSize)
-
         let payloadStart = PanelHeader.size
         let payloadEnd = payloadStart + payloadSize
         guard payloadEnd <= data.count else { return }

@@ -9,20 +9,20 @@ import SwiftUI
 
 @main
 struct PanelcastApp: App {
-    @StateObject private var store = PanelStore()
-    private var receiver: UDPReceiver!
+    @StateObject private var store: PanelStore
+    @StateObject private var receiverService: ReceiverService
 
     init() {
         let store = PanelStore()
         _store = StateObject(wrappedValue: store)
-        receiver = UDPReceiver(port: 5000, store: store)
-        receiver.start()
+        _receiverService = StateObject(wrappedValue: ReceiverService(store: store))
     }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(store)
+                .environmentObject(receiverService)
         }
     }
 }
