@@ -23,6 +23,12 @@ struct PanelcastApp: App {
             ContentView()
                 .environmentObject(store)
                 .statusBarHidden(true)
+                .onAppear {
+                    UIApplication.shared.isIdleTimerDisabled = true
+                }
+                .onDisappear {
+                    UIApplication.shared.isIdleTimerDisabled = false
+                }
         }
     }
 }
