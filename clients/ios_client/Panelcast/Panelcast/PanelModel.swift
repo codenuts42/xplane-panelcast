@@ -11,7 +11,7 @@ import UIKit
 
 final class PanelModel: ObservableObject, Identifiable {
     let id: UInt16 // panelID
-    @Published private(set) var image: UIImage?
+    @Published private(set) var image: CGImage?
 
     init(id: UInt16) {
         self.id = id
@@ -21,7 +21,7 @@ final class PanelModel: ObservableObject, Identifiable {
     private var lastTime = Date()
     private var lastFrameTime = Date()
 
-    func updateImage(_ newImage: UIImage) {
+    func updateImage(_ newImage: CGImage) {
         DispatchQueue.main.async {
             self.image = newImage
         }

@@ -14,28 +14,19 @@ struct PanelView: View {
 
     var body: some View {
         if let image = model.image {
-            let original = image.size
-
             let scale = min(
-                maxWidth / original.width,
-                maxHeight / original.height,
-                1
+                1,
+                maxWidth / CGFloat(image.width),
+                maxHeight / CGFloat(image.height)
             )
-
-            Image(uiImage: image)
+            Image(image, scale: scale, label: Text(""))
                 .resizable()
                 .scaledToFit()
-                .frame(
-                    width: original.width * scale,
-                    height: original.height * scale
-                )
+                .scaleEffect(x: 1, y: -1) // flip
                 .animation(.easeInOut(duration: 0.25), value: scale)
-
         } else {
             Text("Panel \(model.id)\nWaiting for frames…")
                 .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding()
         }
     }
 }

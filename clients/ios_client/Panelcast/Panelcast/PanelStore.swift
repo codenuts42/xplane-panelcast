@@ -19,7 +19,7 @@ final class PanelStore: ObservableObject {
         }
     }
 
-    func receiveFrame(panelID: UInt16, image: UIImage) {
+    func receiveFrame(panelID: UInt16, image: CGImage) {
         let panel = panels[panelID] ?? PanelModel(id: panelID)
         panel.updateImage(image)
         panels[panelID] = panel
