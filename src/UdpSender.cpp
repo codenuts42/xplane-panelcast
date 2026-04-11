@@ -9,6 +9,7 @@
  */
 
 #include "UdpSender.h"
+#include "PanelFrameHeader.h"
 #include <cstring>
 
 UdpSender::~UdpSender() {
@@ -53,18 +54,13 @@ void UdpSender::close() {
  *
  * Contains metadata required by the receiver to reconstruct the full frame.
  */
-struct PanelFragmentHeader {
-	uint32_t magic;
-	uint32_t frameID;
-	uint16_t panelID;
+#pragma pack(push, 1)
+struct UdpFragmentHeader {
 	uint16_t fragIndex;
 	uint16_t fragCount;
-	uint16_t panelCount;
 	uint32_t payloadSize;
-	uint16_t width;
-	uint16_t height;
-	uint32_t compressedSize;
 };
+#pragma pack(pop)
 
 /**
  * @brief Splits a compressed frame into MTU-sized fragments and sends them.
@@ -74,32 +70,34 @@ void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const cha
 		return;
 
 	const int mtu = 1472;
-	const int headerSize = sizeof(PanelFragmentHeader);
+	const int headerSize = sizeof(PanelFrameHeader) + sizeof(UdpFragmentHeader);
 	const int maxPayload = mtu - headerSize;
 
 	int fragCount = (size + maxPayload - 1) / maxPayload;
 
-	PanelFragmentHeader hdr{};
-	hdr.magic = 0xABCD1234;
-	hdr.frameID = frameID;
-	hdr.panelID = panelID;
-	hdr.fragCount = fragCount;
-	hdr.width = w;
-	hdr.height = h;
-	hdr.compressedSize = size;
+	// Build WebSocket frame
+	PanelFrameHeader fh{};
+	fh.frameID = frameID;
+	fh.panelID = panelID;
+	fh.width = w;
+	fh.height = h;
+	fh.compSize = size;
 
 	// Send each fragment
 	for (int i = 0; i < fragCount; i++) {
 		int offset = i * maxPayload;
 		int chunkSize = std::min(maxPayload, size - offset);
 
-		hdr.fragIndex = i;
-		hdr.payloadSize = chunkSize;
+		UdpFragmentHeader uh;
+		uh.fragIndex = i;
+		uh.fragCount = fragCount;
+		uh.payloadSize = chunkSize;
 
 		// Build packet buffer
 		char buffer[mtu];
-		memcpy(buffer, &hdr, headerSize);
-		memcpy(buffer + headerSize, data + offset, chunkSize);
+		memcpy(buffer, &fh, sizeof(fh));
+		memcpy(buffer + sizeof(fh), &uh, sizeof(uh));
+		memcpy(buffer + sizeof(fh) + sizeof(uh), data + offset, chunkSize);
 
 		// Transmit
 		sendto(socket_, buffer, headerSize + chunkSize, 0, (sockaddr*)&destAddr_, sizeof(destAddr_));

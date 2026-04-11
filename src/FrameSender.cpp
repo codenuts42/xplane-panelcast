@@ -9,6 +9,7 @@
  */
 
 #include "FrameSender.h"
+#include "PanelFrameHeader.h"
 #include <chrono>
 #include <lz4.h>
 
