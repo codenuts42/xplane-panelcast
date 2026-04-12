@@ -37,7 +37,7 @@
             logEl.textContent += msg + "\n";
         }
 
-        const ws = new WebSocket("ws://localhost:9000/ws");
+        const ws = new WebSocket(`ws://${window.location.host}/ws`);
         ws.binaryType = "arraybuffer";
 
         ws.onopen = () => log("WebSocket connected");

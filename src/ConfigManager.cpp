@@ -103,6 +103,8 @@ json ConfigManager::loadConfig() {
 }
 
 void ConfigManager::applyConfig(const json& cfg) {
+	// Websocket
+	webPort_ = 9000;
 	// UDP
 	udpIP_ = cfg["udp"].value("ip", "127.0.0.1");
 	udpPort_ = cfg["udp"].value("port", 5000);

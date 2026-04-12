@@ -38,13 +38,11 @@ class ConfigManager {
 	}
 
 	std::string wsUrl() const {
-		// TODO: aus config.json lesen
-		return "ws://localhost:9000/ws";
+		return "ws://0.0.0.0:" + std::to_string(webPort_) + "/ws";
 	}
 
 	std::string httpUrl() const {
-		// TODO: aus config.json lesen
-		return "http://localhost:9000";
+		return "http://0.0.0.0:" + std::to_string(webPort_);
 	}
 
 	std::string getWebPath() const;
@@ -96,6 +94,13 @@ class ConfigManager {
 		return udpPort_;
 	}
 
+	/**
+	 * @brief Returns configured WebSocket port.
+	 */
+	uint16_t webPort() const {
+		return webPort_;
+	}
+
   private:
 	/**
 	 * @brief Determines the plugin directory using XPLMGetPluginInfo().
@@ -124,4 +129,5 @@ class ConfigManager {
 	std::unordered_map<std::string, uint16_t> panelNameToID_; ///< Mapping name → ID
 	std::string udpIP_;                                       ///< Configured UDP IP
 	uint16_t udpPort_ = 0;                                    ///< Configured UDP port
+	uint16_t webPort_ = 0;                                    ///< Configured WebService port
 };
