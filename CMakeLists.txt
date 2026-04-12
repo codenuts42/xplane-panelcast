@@ -200,16 +200,26 @@ if(WIN32)
     add_custom_command(TARGET Panelcast POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "${XPLANE_PLUGIN_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "$<TARGET_FILE:Panelcast>"
-            "${XPLANE_PLUGIN_DIR}/win.xpl"
-        COMMAND ${CMAKE_COMMAND} -E copy
-            "${CMAKE_SOURCE_DIR}/config/config.json"
-            "${XPLANE_PLUGIN_DIR}/config.json"
+
+        # Web-Ordner löschen, damit copy_directory immer alles neu kopiert
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+            "${XPLANE_PLUGIN_DIR}/web"
+
+        # Web-Ordner neu kopieren
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/web"
             "${XPLANE_PLUGIN_DIR}/web"
-        COMMENT "Installing Panelcast plugin and config.json to X-Plane directory"
+
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "$<TARGET_FILE:Panelcast>"
+            "${XPLANE_PLUGIN_DIR}/win.xpl"
+
+        COMMAND ${CMAKE_COMMAND} -E copy
+            "${CMAKE_SOURCE_DIR}/config/config.json"
+            "${XPLANE_PLUGIN_DIR}/config.json"
+
+        COMMENT "Installing Panelcast plugin, config.json and web assets"
     )
 endif()
+
 

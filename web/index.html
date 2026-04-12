@@ -1,82 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 
 <head>
     <meta charset="UTF-8">
-    <title>Panelcast Web Client</title>
+    <title>Panelcast Hybrid RGB565</title>
     <style>
         body {
-            background: #111;
-            color: #eee;
-            font-family: sans-serif;
-        }
-
-        #log {
-            font-size: 12px;
-            white-space: pre;
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
 
         canvas {
-            image-rendering: pixelated;
-            background: black;
+            background: #111;
+        }
+
+        #fps {
+            position: fixed;
+            top: 8px;
+            left: 8px;
+            padding: 4px 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 14px;
+            border-radius: 4px;
         }
     </style>
 </head>
 
 <body>
-    <h1>Panelcast Web Client</h1>
-    <canvas id="panel" width="800" height="600"></canvas>
-    <div id="log"></div>
+
+    <div id="fps">FPS: --</div>
+    <canvas id="panel"></canvas>
 
     <script>
-        const logEl = document.getElementById('log');
-        const canvas = document.getElementById('panel');
-        const ctx = canvas.getContext('2d');
-
-        function log(msg) {
-            logEl.textContent += msg + "\n";
+        // ------------------------------------------------------------
+        // 1) Safari / iOS-Version erkennen
+        // ------------------------------------------------------------
+        function getIOSVersion() {
+            const ua = navigator.userAgent;
+            const match = ua.match(/OS (\d+)_/);
+            return match ? parseInt(match[1], 10) : null;
         }
 
-        const ws = new WebSocket(`ws://${window.location.host}/ws`);
-        ws.binaryType = "arraybuffer";
+        const iOS = getIOSVersion();
+        const isOldIOS = iOS && iOS <= 12;
 
-        ws.onopen = () => log("WebSocket connected");
-        ws.onclose = () => log("WebSocket closed");
-        ws.onerror = (e) => log("WebSocket error: " + e);
+        // ------------------------------------------------------------
+        // 2) Canvas Setup
+        // ------------------------------------------------------------
+        const canvas = document.getElementById("panel");
+        const ctx = canvas.getContext("2d");
 
-        ws.onmessage = (ev) => {
-            const buf = ev.data;
-            const view = new DataView(buf);
+        let off = document.createElement("canvas");
+        let offCtx = off.getContext("2d");
 
-            let offset = 0;
-            const magic = view.getUint32(offset, true); offset += 4;
-            const frameID = view.getUint32(offset, true); offset += 4;
-            const panelID = view.getUint16(offset, true); offset += 2;
-            const width = view.getUint16(offset, true); offset += 2;
-            const height = view.getUint16(offset, true); offset += 2;
-            const compSize = view.getUint32(offset, true); offset += 4;
+        // FPS
+        let fpsElem = document.getElementById("fps");
+        let fps = 0;
+        let lastDraw = performance.now();
+        const MAX_FPS = 30;
+        const MIN_FRAME_TIME = 1000 / MAX_FPS;
 
-            if (magic !== 0xABCD1234) {
-                log("Invalid magic: " + magic.toString(16));
-                return;
+        // Frame-Puffer
+        let latestFrame = null;
+
+        // ------------------------------------------------------------
+        // 3) WebSocket verbinden
+        // ------------------------------------------------------------
+        let ws = null;
+
+        function connect() {
+            const url = `ws://${location.hostname}:9000/ws`;
+            console.log("WS connecting to", url);
+
+            ws = new WebSocket(url);
+            ws.binaryType = "arraybuffer";
+
+            ws.onopen = () => console.log("WS open");
+            ws.onclose = () => console.log("WS closed");
+            ws.onerror = (e) => console.log("WS error", e);
+
+            ws.onmessage = (ev) => {
+                latestFrame = ev.data;
+            };
+        }
+
+        connect();
+
+        // ------------------------------------------------------------
+        // 4) Scheduler
+        // ------------------------------------------------------------
+        function scheduler() {
+            const now = performance.now();
+            const delta = now - lastDraw;
+
+            if (delta >= MIN_FRAME_TIME) {
+                lastDraw = now;
+
+                fps = fps * 0.9 + (1000 / delta) * 0.1;
+                fpsElem.textContent = "FPS: " + fps.toFixed(1);
+
+                if (latestFrame) {
+                    if (isOldIOS) {
+                        drawFrameSync(latestFrame);
+                    } else {
+                        drawFrameAsync(latestFrame);
+                    }
+                    latestFrame = null;
+                }
             }
 
-            //log(`Frame ${frameID} panel ${panelID} ${width}x${height} compSize=${compSize}`);
+            requestAnimationFrame(scheduler);
+        }
 
-            const compressed = new Uint8Array(buf, offset, compSize);
+        scheduler();
 
-            // TODO: LZ4-Dekompression hier einbauen.
-            // Für jetzt: wir tun so, als wären es bereits RGBA-Daten:
-            const rgba = compressed;
+        // ------------------------------------------------------------
+        // 5) RGB565 → RGBA Decoder
+        // ------------------------------------------------------------
+        function rgb565ToRgba(src, dst) {
+            let j = 0;
+            for (let i = 0; i < src.length; i++) {
+                const v = src[i];
 
-            const imageData = new ImageData(width, height);
-            imageData.data.set(rgba);
+                const r = (v >> 11) & 0x1F;
+                const g = (v >> 5) & 0x3F;
+                const b = v & 0x1F;
 
-            canvas.width = width;
-            canvas.height = height;
-            ctx.putImageData(imageData, 0, 0);
-        };
+                dst[j++] = r << 3;
+                dst[j++] = g << 2;
+                dst[j++] = b << 3;
+                dst[j++] = 255;
+            }
+        }
+
+        // ------------------------------------------------------------
+        // 6) SYNCHRONER RENDERER (iOS 12.x und älter, RGB565)
+        // ------------------------------------------------------------
+        function drawFrameSync(buf) {
+            const dv = new DataView(buf);
+
+            const magic = dv.getUint32(0, true);
+            if (magic !== 0xABCD1234) return;
+
+            const width = dv.getUint16(10, true);
+            const height = dv.getUint16(12, true);
+            const size = dv.getUint32(14, true);
+
+            const pixelCount = width * height;
+
+            // RGB565-Daten (2 Bytes pro Pixel)
+            const rgb565 = new Uint16Array(buf, 18, pixelCount);
+
+            // Ziel-RGBA
+            const rgba = new Uint8ClampedArray(pixelCount * 4);
+            rgb565ToRgba(rgb565, rgba);
+
+            if (off.width !== width || off.height !== height) {
+                off.width = width;
+                off.height = height;
+            }
+
+            let img = offCtx.createImageData(width, height);
+            img.data.set(rgba);
+            offCtx.putImageData(img, 0, 0);
+
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            ctx.save();
+            ctx.scale(1, -1);
+            ctx.drawImage(off, 0, -height);
+            ctx.restore();
+        }
+
+        // ------------------------------------------------------------
+        // 7) ASYNCHRONER RENDERER (moderne Browser, RGB565 → RGBA)
+        // ------------------------------------------------------------
+        async function drawFrameAsync(buf) {
+            const dv = new DataView(buf);
+
+            const magic = dv.getUint32(0, true);
+            if (magic !== 0xABCD1234) return;
+
+            const width = dv.getUint16(10, true);
+            const height = dv.getUint16(12, true);
+            const size = dv.getUint32(14, true);
+
+            const pixelCount = width * height;
+
+            const rgb565 = new Uint16Array(buf, 18, pixelCount);
+            const rgba = new Uint8ClampedArray(pixelCount * 4);
+            rgb565ToRgba(rgb565, rgba);
+
+            const imgData = new ImageData(rgba, width, height);
+            const bmp = await createImageBitmap(imgData);
+
+            if (canvas.width !== width || canvas.height !== height) {
+                canvas.width = width;
+                canvas.height = height;
+            }
+
+            ctx.save();
+            ctx.scale(1, -1);
+            ctx.drawImage(bmp, 0, -height);
+            ctx.restore();
+        }
     </script>
+
 </body>
 
 </html>
