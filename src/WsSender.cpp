@@ -1,16 +1,36 @@
+/**
+ * @file WsSender.cpp
+ * @brief Minimal threaded WebSocket backend for Panelcast.
+ *
+ * (c) 2025 Peter Vorwieger — All rights reserved.
+ */
+
 #include "WsSender.h"
 #include "Logger.h"
+#include <chrono>
 #include <cstring>
 
 static Logger logger("[WsSender]");
 
+// Helpers
+inline std::string to_string(mg_str s) {
+	return std::string(s.buf, s.len);
+}
+
+static bool uriEquals(mg_str s, const char* cstr) {
+	size_t n = strlen(cstr);
+	return s.len == n && strncmp(s.buf, cstr, n) == 0;
+}
+
 WsSender::WsSender() {
-	logger.log("WsSender");
+	logger.log("WsSender()");
 	mg_mgr_init(&mgr_);
 }
 
 WsSender::~WsSender() {
-	logger.log("~WsSender");
+	logger.log("~WsSender()");
+	running_ = false;
+	if (thread_.joinable()) { thread_.join(); }
 	mg_mgr_free(&mgr_);
 }
 
@@ -27,27 +47,15 @@ bool WsSender::initServer(const char* rootDir, const char* listenAddr) {
 	}
 
 	logger.log("initServer OK: HTTP+WS listener created");
+
+	// Thread starten
+	running_ = true;
+	thread_ = std::thread([this] { threadMain(); });
+
 	return true;
 }
 
-void WsSender::pollOnce() {
-	logger.log("pollOnce 1");
-	mg_mgr_poll(&mgr_, 0);
-	logger.log("pollOnce 2");
-	if (!ws_) return;
-	logger.log("pollOnce 3");
-	std::lock_guard<std::mutex> lock(queueMutex_);
-	int i = 1;
-	for (auto& f : queue_) {
-		logger.log("pollOnce 4: {}", i++);
-		mg_ws_send(ws_, (const char*)f.data(), f.size(), WEBSOCKET_OP_BINARY);
-	}
-	queue_.clear();
-}
-
 void WsSender::sendFrame(uint16_t panelID, uint32_t frameID, const char* data, int size, int width, int height) {
-
-	logger.log("sendFrame panelID={}, panelID={}", panelID, frameID);
 
 	PanelFrameHeader hdr{};
 	hdr.frameID = frameID;
@@ -61,17 +69,34 @@ void WsSender::sendFrame(uint16_t panelID, uint32_t frameID, const char* data, i
 	std::memcpy(packet.data() + sizeof(hdr), data, size);
 
 	std::lock_guard<std::mutex> lock(queueMutex_);
+
+	// Drop-Oldest
 	if (queue_.size() > 2) { queue_.erase(queue_.begin(), queue_.end() - 2); }
+
 	queue_.push_back(std::move(packet));
 }
 
-inline std::string to_string(mg_str s) {
-	return std::string(s.buf, s.len);
-}
+void WsSender::threadMain() {
+	logger.log("threadMain: start");
 
-static bool uriEquals(mg_str s, const char* cstr) {
-	size_t n = strlen(cstr);
-	return s.len == n && strncmp(s.buf, cstr, n) == 0;
+	while (running_) {
+		mg_mgr_poll(&mgr_, 2);
+
+		if (ws_) {
+			std::vector<std::vector<uint8_t>> local;
+
+			{
+				std::lock_guard<std::mutex> lock(queueMutex_);
+				local.swap(queue_);
+			}
+
+			for (auto& f : local) {
+				mg_ws_send(ws_, (const char*)f.data(), f.size(), WEBSOCKET_OP_BINARY);
+			}
+		}
+	}
+
+	logger.log("threadMain: stop");
 }
 
 void WsSender::httpHandler(mg_connection* c, int ev, void* ev_data) {
@@ -80,7 +105,7 @@ void WsSender::httpHandler(mg_connection* c, int ev, void* ev_data) {
 	if (ev == MG_EV_HTTP_MSG) {
 		auto* hm = (mg_http_message*)ev_data;
 
-		// 1) WebSocket-Upgrade auf /ws
+		// WebSocket Upgrade
 		if (uriEquals(hm->uri, "/ws")) {
 			logger.log("HTTP: WS upgrade on {}", to_string(hm->uri));
 			mg_ws_upgrade(c, hm, nullptr);
@@ -88,7 +113,7 @@ void WsSender::httpHandler(mg_connection* c, int ev, void* ev_data) {
 			return;
 		}
 
-		// 2) Statische Dateien ausliefern
+		// Static files
 		struct mg_http_serve_opts opts = {};
 		opts.root_dir = self->webRoot_.c_str();
 

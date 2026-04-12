@@ -58,8 +58,6 @@ int PanelcastPlugin::drawCallbackTrampoline(XPLMDrawingPhase inPhase, int inIsBe
 int PanelcastPlugin::drawCallback() {
 	config_.update();
 
-	if (useWebSocket_) { wsSender_.pollOnce(); }
-
 	static GLint maxFBO = 0;
 	GLint currentFBO = 0;
 
