@@ -30,6 +30,39 @@ target_include_directories(lz4 PUBLIC
     ${lz4_SOURCE_DIR}/lib
 )
 
+# ------------------------------------------------------------
+# WASM LZ4 (für Browser-Client)
+# ------------------------------------------------------------
+# Nur bauen, wenn Emscripten verwendet wird
+if (CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+
+    message(STATUS "Building LZ4 WASM module")
+
+    add_executable(lz4wasm
+        ${lz4_SOURCE_DIR}/lib/lz4.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/web/lz4_wasm.c
+    )
+
+    set_target_properties(lz4wasm PROPERTIES
+        OUTPUT_NAME "lz4-wasm"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/web"
+    )
+
+    target_include_directories(lz4wasm PRIVATE
+        ${lz4_SOURCE_DIR}/lib
+    )
+
+    target_link_options(lz4wasm PRIVATE
+        "-O3"
+        "-sMODULARIZE=1"
+        "-sEXPORT_ES6=1"
+        "-sEXPORTED_FUNCTIONS=['_lz4_decompress','_lz4_free']"
+        "-sEXPORTED_RUNTIME_METHODS=['cwrap','getValue','malloc','free']"
+        "--no-entry"
+    )
+
+endif()
+
 # ============================================================
 # nlohmann/json via FetchContent
 # ============================================================
@@ -53,6 +86,17 @@ target_include_directories(glad PUBLIC
 )
 
 # ============================================================
+# Mongoose WebServer (HTTP + WebSocket)
+# ============================================================
+add_library(mongoose STATIC
+    third_party/mongoose/mongoose.c
+)
+
+target_include_directories(mongoose PUBLIC
+    third_party/mongoose
+)
+
+# ============================================================
 # Source files
 # ============================================================
 set(SRC_FILES
@@ -62,6 +106,7 @@ set(SRC_FILES
     src/UdpSender.cpp
     src/PanelCapturer.cpp
     src/FrameSender.cpp
+    src/WsSender.cpp
 )
 
 set(HDR_FILES
@@ -72,6 +117,7 @@ set(HDR_FILES
     src/PanelCapturer.h
     src/FrameSender.h
     src/PanelcastPlugin.h
+    src/WsSender.h
 )
 
 # ============================================================
@@ -119,6 +165,7 @@ add_library(Panelcast SHARED
 target_link_libraries(Panelcast
     glad
     lz4
+    mongoose
     nlohmann_json
     ${XPLM_LIBS}
     ${PLATFORM_LIBS}
@@ -159,6 +206,9 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy
             "${CMAKE_SOURCE_DIR}/config/config.json"
             "${XPLANE_PLUGIN_DIR}/config.json"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/web"
+            "${XPLANE_PLUGIN_DIR}/web"
         COMMENT "Installing Panelcast plugin and config.json to X-Plane directory"
     )
 endif()

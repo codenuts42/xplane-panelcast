@@ -1,3 +1,7 @@
+// PanelFrameHeader.h
+#pragma once
+#include <cstdint>
+
 #pragma pack(push, 1)
 struct PanelFrameHeader {
 	uint32_t magic = 0xABCD1234;
@@ -5,6 +9,6 @@ struct PanelFrameHeader {
 	uint16_t panelID;
 	uint16_t width;
 	uint16_t height;
-	uint32_t compSize;
+	uint32_t compressedSize;
 };
 #pragma pack(pop)

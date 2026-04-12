@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Panelcast Web Client</title>
+    <style>
+        body {
+            background: #111;
+            color: #eee;
+            font-family: sans-serif;
+        }
+
+        #log {
+            font-size: 12px;
+            white-space: pre;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+            background: black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Panelcast Web Client</h1>
+    <canvas id="panel" width="800" height="600"></canvas>
+    <div id="log"></div>
+
+    <script>
+        const logEl = document.getElementById('log');
+        const canvas = document.getElementById('panel');
+        const ctx = canvas.getContext('2d');
+
+        function log(msg) {
+            logEl.textContent += msg + "\n";
+        }
+
+        const ws = new WebSocket("ws://localhost:9000/ws");
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = () => log("WebSocket connected");
+        ws.onclose = () => log("WebSocket closed");
+        ws.onerror = (e) => log("WebSocket error: " + e);
+
+        ws.onmessage = (ev) => {
+            const buf = ev.data;
+            const view = new DataView(buf);
+
+            let offset = 0;
+            const magic = view.getUint32(offset, true); offset += 4;
+            const frameID = view.getUint32(offset, true); offset += 4;
+            const panelID = view.getUint16(offset, true); offset += 2;
+            const width = view.getUint16(offset, true); offset += 2;
+            const height = view.getUint16(offset, true); offset += 2;
+            const compSize = view.getUint32(offset, true); offset += 4;
+
+            if (magic !== 0xABCD1234) {
+                log("Invalid magic: " + magic.toString(16));
+                return;
+            }
+
+            //log(`Frame ${frameID} panel ${panelID} ${width}x${height} compSize=${compSize}`);
+
+            const compressed = new Uint8Array(buf, offset, compSize);
+
+            // TODO: LZ4-Dekompression hier einbauen.
+            // Für jetzt: wir tun so, als wären es bereits RGBA-Daten:
+            const rgba = compressed;
+
+            const imageData = new ImageData(width, height);
+            imageData.data.set(rgba);
+
+            canvas.width = width;
+            canvas.height = height;
+            ctx.putImageData(imageData, 0, 0);
+        };
+    </script>
+</body>
+
+</html>

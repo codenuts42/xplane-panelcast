@@ -30,6 +30,25 @@
  */
 class ConfigManager {
   public:
+	enum class TransportMode { Udp, WebSocket };
+
+	TransportMode transportMode() const {
+		// TODO: aus config.json lesen
+		return TransportMode::WebSocket;
+	}
+
+	std::string wsUrl() const {
+		// TODO: aus config.json lesen
+		return "ws://localhost:9000/ws";
+	}
+
+	std::string httpUrl() const {
+		// TODO: aus config.json lesen
+		return "http://localhost:9000";
+	}
+
+	std::string getWebPath() const;
+
 	/**
 	 * @brief Constructs an empty ConfigManager.
 	 */

@@ -25,7 +25,7 @@ import numpy as np
 # Protokoll / Header
 # ---------------------------------------------------------------------------
 
-HDR_FORMAT = "<I I H H H H I H H I"
+HDR_FORMAT = "<I I H H H I H H I"
 HEADER_SIZE = struct.calcsize(HDR_FORMAT)
 MAGIC = 0xABCD1234
 
@@ -70,7 +70,7 @@ def handle_fragment(data):
         return
 
     hdr = struct.unpack(HDR_FORMAT, data[:HEADER_SIZE])
-    magic, frameID, panelID, fragIndex, fragCount, panelCount, payloadSize, width, height, compSize = hdr
+    magic, frameID, panelID, width, height, compSize, fragIndex, fragCount, payloadSize  = hdr
 
     if magic != MAGIC:
         return

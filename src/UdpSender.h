@@ -9,8 +9,10 @@
  */
 
 #pragma once
-#include "RawPanelFrame.h"
-#include <cstdint>
+#include "FrameTransport.h"
+#include "PanelFrameHeader.h"
+#include "mongoose.h"
+#include <mutex>
 #include <vector>
 
 #ifdef _WIN32
@@ -26,7 +28,7 @@
  * Frames are split into MTU‑sized fragments, each prefixed with a header
  * containing metadata required for reassembly on the receiver side.
  */
-class UdpSender {
+class UdpSender : public FrameTransport {
   public:
 	UdpSender() = default;
 	~UdpSender();
@@ -34,7 +36,11 @@ class UdpSender {
 	bool init(const char* ip, uint16_t port);
 	void close();
 
-	void sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* compData, int compSize, int w, int h);
+	void sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* data, int size, int w, int h);
+
+	void sendFrame(uint16_t panelID, uint32_t frameID, const char* data, int size, int w, int h) override {
+		sendPanelFragments(panelID, frameID, data, size, w, h);
+	}
 
   private:
 	int socket_ = -1;

@@ -15,8 +15,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include "FrameTransport.h"
 #include "RawPanelFrame.h"
-#include "UdpSender.h"
 
 /**
  * @brief Holds the shared framebuffer data and its synchronization primitive.
@@ -39,7 +39,7 @@ struct FrameBuffer {
  */
 class FrameSender {
   public:
-	explicit FrameSender(UdpSender& sender);
+	FrameSender(FrameTransport& transport);
 	~FrameSender();
 
 	void start();
@@ -57,7 +57,8 @@ class FrameSender {
 	void workerLoop();
 	void compressAndSendPanel(const RawPanelFrame& f);
 
-	UdpSender& udpSender_;
+	FrameTransport& transport_;
+
 	std::atomic<bool> running_{false};
 	std::thread workerThread_;
 

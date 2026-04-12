@@ -22,6 +22,7 @@
 #include "FrameSender.h"
 #include "PanelCapturer.h"
 #include "UdpSender.h"
+#include "WsSender.h"
 
 #include "XPLMDisplay.h"
 #include "XPLMGraphics.h"
@@ -85,8 +86,10 @@ class PanelcastPlugin {
 	int drawCallback();
 
   private:
-	ConfigManager config_;                     ///< Central configuration handler
-	UdpSender udpSender_;                      ///< UDP transmission backend
-	PanelCapturer panelCapturer_;              ///< Framebuffer capture helper
-	std::unique_ptr<FrameSender> frameSender_; ///< Background compression/transmission
+	ConfigManager config_;
+	PanelCapturer panelCapturer_;
+	UdpSender udpSender_;
+	WsSender wsSender_;
+	std::unique_ptr<FrameSender> frameSender_;
+	bool useWebSocket_ = false;
 };

@@ -13,7 +13,7 @@
 #include <chrono>
 #include <lz4.h>
 
-FrameSender::FrameSender(UdpSender& sender) : udpSender_(sender) {
+FrameSender::FrameSender(FrameTransport& transport) : transport_(transport) {
 }
 
 FrameSender::~FrameSender() {
@@ -27,8 +27,7 @@ void FrameSender::start() {
 
 void FrameSender::stop() {
 	running_.store(false);
-	if (workerThread_.joinable())
-		workerThread_.join();
+	if (workerThread_.joinable()) workerThread_.join();
 }
 
 /**
@@ -50,7 +49,8 @@ void FrameSender::workerLoop() {
 		}
 
 		// Process all captured frames
-		for (auto& [panelID, frame] : local) compressAndSendPanel(frame);
+		for (auto& [panelID, frame] : local)
+			compressAndSendPanel(frame);
 
 		// Prevent busy-looping
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -66,20 +66,16 @@ void FrameSender::workerLoop() {
 void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 	int rawSize = f.width * f.height * 4;
 
-	// Allocate compression buffer
-	int maxComp = LZ4_compressBound(rawSize);
-	std::vector<char> comp(maxComp);
-
-	// Compress raw RGBA data
-	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
-	if (compSize <= 0)
-		return;
-
-	comp.resize(compSize);
+	//	int maxComp = LZ4_compressBound(rawSize);
+	//	std::vector<char> comp(maxComp);
+	//	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
+	//	if (compSize <= 0) return;
+	//	comp.resize(compSize);
 
 	uint32_t& counter = frameCounters_[f.panelID];
 	uint32_t frameID = counter++;
 
-	// Transmit compressed frame
-	udpSender_.sendPanelFragments(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
+	//	transport_.sendFrame(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
+	transport_.sendFrame(f.panelID, frameID, reinterpret_cast<const char*>(f.pixels.data()), rawSize, f.width,
+	                     f.height);
 }

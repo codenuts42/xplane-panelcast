@@ -11,19 +11,25 @@ PanelcastPlugin& PanelcastPlugin::instance() {
 }
 
 bool PanelcastPlugin::start() {
-	config_.initialize();
-
-	udpSender_.init(config_.udpIP().c_str(), config_.udpPort());
-
 #ifdef _WIN32
 	gladLoadGL();
 #endif
 
-	frameSender_ = std::make_unique<FrameSender>(udpSender_);
+	config_.initialize();
+
+	useWebSocket_ = (config_.transportMode() == ConfigManager::TransportMode::WebSocket);
+
+	if (useWebSocket_) {
+		wsSender_.initServer(config_.getWebPath().c_str(), config_.httpUrl().c_str());
+		frameSender_ = std::make_unique<FrameSender>(wsSender_);
+	} else {
+		udpSender_.init(config_.udpIP().c_str(), config_.udpPort());
+		frameSender_ = std::make_unique<FrameSender>(udpSender_);
+	}
+
 	frameSender_->start();
 
 	XPLMRegisterDrawCallback(drawCallbackTrampoline, xplm_Phase_Gauges, 0, this);
-
 	return true;
 }
 
@@ -52,12 +58,13 @@ int PanelcastPlugin::drawCallbackTrampoline(XPLMDrawingPhase inPhase, int inIsBe
 int PanelcastPlugin::drawCallback() {
 	config_.update();
 
+	if (useWebSocket_) { wsSender_.pollOnce(); }
+
 	static GLint maxFBO = 0;
 	GLint currentFBO = 0;
 
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFBO);
-	if (currentFBO < maxFBO)
-		return 1;
+	if (currentFBO < maxFBO) return 1;
 
 	maxFBO = currentFBO;
 

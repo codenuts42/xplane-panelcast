@@ -25,8 +25,7 @@ bool UdpSender::init(const char* ip, uint16_t port) {
 
 	// Create UDP socket
 	socket_ = socket(AF_INET, SOCK_DGRAM, 0);
-	if (socket_ < 0)
-		return false;
+	if (socket_ < 0) return false;
 
 	// Configure destination address
 	memset(&destAddr_, 0, sizeof(destAddr_));
@@ -66,8 +65,7 @@ struct UdpFragmentHeader {
  * @brief Splits a compressed frame into MTU-sized fragments and sends them.
  */
 void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const char* data, int size, int w, int h) {
-	if (socket_ < 0)
-		return;
+	if (socket_ < 0) return;
 
 	const int mtu = 1472;
 	const int headerSize = sizeof(PanelFrameHeader) + sizeof(UdpFragmentHeader);
@@ -81,7 +79,7 @@ void UdpSender::sendPanelFragments(uint16_t panelID, uint32_t frameID, const cha
 	fh.panelID = panelID;
 	fh.width = w;
 	fh.height = h;
-	fh.compSize = size;
+	fh.compressedSize = size;
 
 	// Send each fragment
 	for (int i = 0; i < fragCount; i++) {

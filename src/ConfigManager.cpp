@@ -40,8 +40,7 @@ void ConfigManager::initialize() {
 void ConfigManager::update() {
 	std::string path = getConfigPath();
 
-	if (!fs::exists(path))
-		return;
+	if (!fs::exists(path)) return;
 
 	auto ts = fs::last_write_time(path);
 
@@ -75,6 +74,10 @@ void ConfigManager::detectPluginDirectory() {
 
 std::string ConfigManager::getConfigPath() const {
 	return pluginDirectory_ + "config.json";
+}
+
+std::string ConfigManager::getWebPath() const {
+	return pluginDirectory_ + "web";
 }
 
 json ConfigManager::loadConfig() {
