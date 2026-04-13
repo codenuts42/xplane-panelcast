@@ -19,18 +19,6 @@
 #include "RawPanelFrame.h"
 
 /**
- * @brief Holds the shared framebuffer data and its synchronization primitive.
- *
- * The capture thread writes new frames into this structure, while the worker
- * thread consumes and clears them. The mutex protects the map from concurrent
- * access.
- */
-struct FrameBuffer {
-	std::mutex mtx;
-	std::unordered_map<uint16_t, RawPanelFrame> frames;
-};
-
-/**
  * @brief Worker thread that compresses and transmits panel frames.
  *
  * The FrameSender receives raw frames from the PanelCapturer, stores them in
@@ -46,11 +34,11 @@ class FrameSender {
 	void stop();
 
 	std::unique_lock<std::mutex> lockFrames() {
-		return std::unique_lock<std::mutex>(frameBuffer_.mtx);
+		return std::unique_lock<std::mutex>(frameMutex_);
 	}
 
 	std::unordered_map<uint16_t, RawPanelFrame>& frames() {
-		return frameBuffer_.frames;
+		return frames_;
 	}
 
   private:
@@ -62,6 +50,7 @@ class FrameSender {
 	std::atomic<bool> running_{false};
 	std::thread workerThread_;
 
-	FrameBuffer frameBuffer_;
+	std::mutex frameMutex_;
+	std::unordered_map<uint16_t, RawPanelFrame> frames_;
 	std::unordered_map<uint16_t, uint32_t> frameCounters_;
 };

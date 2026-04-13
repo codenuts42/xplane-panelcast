@@ -44,8 +44,8 @@ void FrameSender::workerLoop() {
 
 		{
 			// Swap out all pending frames in one atomic operation
-			std::lock_guard<std::mutex> lock(frameBuffer_.mtx);
-			std::swap(local, frameBuffer_.frames);
+			std::lock_guard<std::mutex> lock(frameMutex_);
+			std::swap(local, frames_);
 		}
 
 		// Process all captured frames

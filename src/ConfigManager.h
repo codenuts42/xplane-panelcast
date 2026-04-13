@@ -37,10 +37,6 @@ class ConfigManager {
 		return TransportMode::WebSocket;
 	}
 
-	std::string wsUrl() const {
-		return "ws://0.0.0.0:" + std::to_string(webPort_) + "/ws";
-	}
-
 	std::string httpUrl() const {
 		return "http://0.0.0.0:" + std::to_string(webPort_);
 	}
