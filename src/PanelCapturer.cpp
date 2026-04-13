@@ -20,12 +20,10 @@ void PanelCapturer::initOrResizePanelPBOs(uint16_t panelID, int w, int h) {
 	auto& st = panelStates_[panelID];
 
 	// If already initialized with correct size, nothing to do
-	if (st.initialized && st.w == w && st.h == h)
-		return;
+	if (st.initialized && st.w == w && st.h == h) return;
 
 	// Delete old PBOs if necessary
-	if (st.initialized)
-		glDeleteBuffers(2, st.pbo);
+	if (st.initialized) glDeleteBuffers(2, st.pbo);
 
 	// Allocate new double-buffered PBOs
 	glGenBuffers(2, st.pbo);
@@ -88,5 +86,6 @@ void PanelCapturer::captureSinglePanel(const PanelROI& roi, std::unordered_map<u
  */
 void PanelCapturer::captureAllPanels(const std::vector<PanelROI>& rois,
                                      std::unordered_map<uint16_t, RawPanelFrame>& outFrames) {
-	for (const auto& roi : rois) captureSinglePanel(roi, outFrames);
+	for (const auto& roi : rois)
+		captureSinglePanel(roi, outFrames);
 }
