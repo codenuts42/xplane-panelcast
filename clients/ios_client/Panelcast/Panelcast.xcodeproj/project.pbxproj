@@ -26,9 +26,33 @@
 		D0DEC4E22F82EAD8000110AE /* lz4hc.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = lz4hc.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D0D8994E2F8D80F000F0F0F9 /* Exceptions for "Panelcast" folder in "Panelcast" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				RGB565ToRGBA.metal,
+			);
+			target = D0DEC4A72F827D51000110AE /* Panelcast */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		D0D8994F2F8D80F000F0F0F9 /* Exceptions for "Panelcast" folder in "Copy Bundle Resources" phase from "Panelcast" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = D0DEC4A62F827D51000110AE /* Resources */;
+			membershipExceptions = (
+				RGB565ToRGBA.metal,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		D0DEC4AA2F827D51000110AE /* Panelcast */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				D0D8994E2F8D80F000F0F0F9 /* Exceptions for "Panelcast" folder in "Panelcast" target */,
+				D0D8994F2F8D80F000F0F0F9 /* Exceptions for "Panelcast" folder in "Copy Bundle Resources" phase from "Panelcast" target */,
+			);
 			path = Panelcast;
 			sourceTree = "<group>";
 		};
