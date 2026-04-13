@@ -66,16 +66,14 @@ void FrameSender::workerLoop() {
 void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
 	int rawSize = f.width * f.height * 4;
 
-	//	int maxComp = LZ4_compressBound(rawSize);
-	//	std::vector<char> comp(maxComp);
-	//	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
-	//	if (compSize <= 0) return;
-	//	comp.resize(compSize);
+	int maxComp = LZ4_compressBound(rawSize);
+	std::vector<char> comp(maxComp);
+	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
+	if (compSize <= 0) return;
+	comp.resize(compSize);
 
 	uint32_t& counter = frameCounters_[f.panelID];
 	uint32_t frameID = counter++;
 
-	//	transport_.sendFrame(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
-	transport_.sendFrame(f.panelID, frameID, reinterpret_cast<const char*>(f.pixels.data()), rawSize, f.width,
-	                     f.height);
+	transport_.sendFrame(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
 }
