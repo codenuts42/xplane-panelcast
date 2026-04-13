@@ -19,9 +19,14 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
 
                 if store.panels.isEmpty {
-                    Text("Waiting for panels…")
-                        .foregroundColor(.gray)
-                        .font(.title2)
+                    VStack(spacing: 8) {
+                        Text("Waiting for panels…")
+                            .foregroundColor(Color(white: 0.85))
+                            .font(.title2)
+                        Text("Your IP: \(store.localIP)")
+                            .font(.subheadline)
+                            .foregroundColor(Color(white: 0.75))
+                    }
                 } else {
                     let availableWidth = geo.size.width - 32
                     let panelCount = store.panels.count
