@@ -20,7 +20,7 @@ bool PanelcastPlugin::start() {
 	useWebSocket_ = (config_.transportMode() == ConfigManager::TransportMode::WebSocket);
 
 	if (useWebSocket_) {
-		wsSender_.initServer(config_.getWebPath().c_str(), config_.httpUrl().c_str());
+		wsSender_.init(config_.getWebPath(), config_.httpUrl().c_str());
 		frameSender_ = std::make_unique<FrameSender>(wsSender_);
 	} else {
 		udpSender_.init(config_.udpIP().c_str(), config_.udpPort());
@@ -70,6 +70,8 @@ int PanelcastPlugin::drawCallback() {
 		auto lock = frameSender_->lockFrames();
 		panelCapturer_.captureAllPanels(config_.panels(), frameSender_->frames());
 	}
+
+	if (useWebSocket_) wsSender_.doPoll(0); // nicht blockierend, FPS-neutral
 
 	return 1;
 }

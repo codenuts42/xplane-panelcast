@@ -12,16 +12,6 @@
 
 static Logger logger("[WsSender]");
 
-// Helpers
-inline std::string to_string(mg_str s) {
-	return std::string(s.buf, s.len);
-}
-
-static bool uriEquals(mg_str s, const char* cstr) {
-	size_t n = strlen(cstr);
-	return s.len == n && strncmp(s.buf, cstr, n) == 0;
-}
-
 WsSender::WsSender() {
 	logger.log("WsSender()");
 }
@@ -29,10 +19,10 @@ WsSender::WsSender() {
 WsSender::~WsSender() {
 	logger.log("~WsSender()");
 	running_ = false;
-	if (thread_.joinable()) thread_.join();
+	mg_mgr_free(&mgr_);
 }
 
-bool WsSender::initServer(const char* rootDir, const char* listenAddr) {
+bool WsSender::init(std::string rootDir, const char* listenAddr) {
 	logger.log("initServer rootDir={}", rootDir);
 	logger.log("initServer listenAddr={}", listenAddr);
 
@@ -46,12 +36,51 @@ bool WsSender::initServer(const char* rootDir, const char* listenAddr) {
 		return false;
 	}
 
-	// Thread starten
 	running_ = true;
-	thread_ = std::thread(&WsSender::threadMain, this);
-
 	logger.log("Server started on {}", listenAddr);
 	return true;
+}
+
+static bool uriEquals(mg_str s, const char* cstr) {
+	size_t n = strlen(cstr);
+	return s.len == n && strncmp(s.buf, cstr, n) == 0;
+}
+
+void WsSender::httpHandler(mg_connection* c, int ev, void* ev_data) {
+	auto* self = static_cast<WsSender*>(c->fn_data);
+
+	switch (ev) {
+
+	case MG_EV_HTTP_MSG: {
+		auto* hm = (mg_http_message*)ev_data;
+
+		// 1) WebSocket-Upgrade?
+		if (uriEquals(hm->uri, "/ws")) {
+			mg_ws_upgrade(c, hm, nullptr);
+			return;
+		}
+
+		// 2) Normale Dateien ausliefern
+		struct mg_http_serve_opts opts = {};
+		opts.root_dir = self->webRoot_.c_str();
+		mg_http_serve_dir(c, hm, &opts);
+		return;
+	}
+
+	case MG_EV_WS_OPEN: {
+		logger.log("Websocket connected");
+		self->ws_ = c;
+		return;
+	}
+
+	case MG_EV_CLOSE: {
+		if (self->ws_ == c) {
+			logger.log("Websocket closed");
+			self->ws_ = nullptr;
+		}
+		return;
+	}
+	}
 }
 
 static void rgbaToRgb565(const uint8_t* src, uint16_t* dst, int pixelCount) {
@@ -74,86 +103,35 @@ void WsSender::sendFrame(uint16_t panelID, uint32_t frameID, const char* data, i
 	hdr.panelID = panelID;
 	hdr.width = width;
 	hdr.height = height;
-	hdr.compressedSize = rgb565Size; // WICHTIG: neue Größe
+	hdr.compressedSize = rgb565Size;
 
 	std::vector<uint8_t> packet(sizeof(PanelFrameHeader) + rgb565Size);
-
 	memcpy(packet.data(), &hdr, sizeof(PanelFrameHeader));
 
 	// RGBA → RGB565
 	rgbaToRgb565((const uint8_t*)data, (uint16_t*)(packet.data() + sizeof(PanelFrameHeader)), pixelCount);
 
-	// ALWAYS-LATEST
 	std::lock_guard<std::mutex> lock(queueMutex_);
-	queue_.clear();
-	queue_.push_back(std::move(packet));
+	latestFrame_ = std::move(packet); // immer nur der neueste Frame
 }
 
-void WsSender::httpHandler(mg_connection* c, int ev, void* ev_data) {
-	auto* self = static_cast<WsSender*>(c->fn_data);
+void WsSender::doPoll(int timeoutMs) {
+	if (!running_) return;
 
-	switch (ev) {
-	case MG_EV_HTTP_MSG: {
-		auto* hm = (mg_http_message*)ev_data;
+	mg_mgr_poll(&mgr_, timeoutMs);
 
-		// 1) WebSocket-Upgrade?
-		if (uriEquals(hm->uri, "/ws")) {
-			mg_ws_upgrade(c, hm, nullptr);
-			return;
-		}
+	mg_connection* ws = ws_;
+	if (!ws) return;
 
-		// 2) Normale Dateien ausliefern
-		struct mg_http_serve_opts opts = {};
-		opts.root_dir = self->webRoot_.c_str();
-		mg_http_serve_dir(c, hm, &opts);
-		return;
+	// Wenn Socket ausgelastet → nichts senden
+	if (ws->send.len > 0) return;
+
+	std::vector<uint8_t> frame;
+	{
+		std::lock_guard<std::mutex> lock(queueMutex_);
+		if (latestFrame_.empty()) return;
+		frame = latestFrame_; // Kopie
 	}
 
-	case MG_EV_WS_OPEN: {
-		printf("[WsSender] WS connected\n");
-		self->ws_ = c;
-		return;
-	}
-
-	case MG_EV_CLOSE: {
-		if (self->ws_ == c) {
-			printf("[WsSender] WS closed\n");
-			self->ws_ = nullptr;
-		}
-		return;
-	}
-	}
-}
-
-void WsSender::threadMain() {
-	const int targetFps = 20; // perfekt für alte iPads
-	const int frameIntervalMs = 1000 / targetFps;
-
-	auto lastSend = std::chrono::steady_clock::now();
-
-	while (running_) {
-		mg_mgr_poll(&mgr_, 10); // 10ms Poll
-
-		auto now = std::chrono::steady_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSend).count();
-		if (elapsed < frameIntervalMs) continue;
-
-		mg_connection* ws = ws_;
-		if (!ws) continue;
-
-		// Wenn Socket ausgelastet → Frame verwerfen
-		if (ws->send.len > 0) continue;
-
-		std::vector<uint8_t> frame;
-		{
-			std::lock_guard<std::mutex> lock(queueMutex_);
-			if (queue_.empty()) continue;
-			frame = queue_.back(); // immer nur den neuesten Frame
-		}
-
-		mg_ws_send(ws, (const char*)frame.data(), frame.size(), WEBSOCKET_OP_BINARY);
-		lastSend = now;
-	}
-
-	mg_mgr_free(&mgr_);
+	mg_ws_send(ws, (const char*)frame.data(), frame.size(), WEBSOCKET_OP_BINARY);
 }

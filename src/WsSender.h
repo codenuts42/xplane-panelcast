@@ -19,7 +19,10 @@ class WsSender : public FrameTransport {
 	WsSender();
 	~WsSender();
 
-	bool initServer(const char* rootDir, const char* listenAddr);
+	bool init(std::string rootDir, const char* listenAddr);
+
+	// Wird 1× pro Frame im X‑Plane drawCallback aufgerufen
+	void doPoll(int timeoutMs);
 
 	void sendFrame(uint16_t panelID, uint32_t frameID, const char* data, int size, int width, int height) override;
 
@@ -35,8 +38,7 @@ class WsSender : public FrameTransport {
 	std::string webRoot_;
 
 	std::mutex queueMutex_;
-	std::vector<std::vector<uint8_t>> queue_;
+	std::vector<uint8_t> latestFrame_; // immer nur 1 Frame
 
-	std::thread thread_;
-	std::atomic<bool> running_{false};
+	bool running_ = false;
 };
