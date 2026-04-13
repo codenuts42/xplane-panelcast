@@ -8,15 +8,14 @@
 import Foundation
 
 struct PacketHeader {
-    /// 4 + 4 + 2 + 2 + 2 + 2 + 4 + 2 + 2 + 4 = 28 Bytes
-    static let size = 28
+    /// 4 + 4 + 2 + 2 + 2 + 4 + 2 + 2 + 4 = 28 Bytes
+    static let size = 26
 
     let magic: UInt32
     let frameID: UInt32
     let panelID: UInt16
     let fragIndex: UInt16
     let fragCount: UInt16
-    let panelCount: UInt16
     let payloadSize: UInt32
     let width: UInt16
     let height: UInt16
@@ -40,7 +39,7 @@ struct PacketHeader {
         self.panelID = read(UInt16.self)
         self.fragIndex = read(UInt16.self)
         self.fragCount = read(UInt16.self)
-        self.panelCount = read(UInt16.self)
+
         self.payloadSize = read(UInt32.self)
         self.width = read(UInt16.self)
         self.height = read(UInt16.self)
