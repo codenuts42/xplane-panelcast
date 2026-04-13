@@ -162,6 +162,9 @@ add_library(Panelcast SHARED
     ${HDR_FILES}
 )
 
+# AVX2 (rgba8_to_rgb565_avx2) 
+target_compile_options(Panelcast PRIVATE -mavx2)
+
 target_link_libraries(Panelcast
     glad
     lz4
@@ -201,11 +204,6 @@ if(WIN32)
         COMMAND ${CMAKE_COMMAND} -E make_directory
             "${XPLANE_PLUGIN_DIR}"
 
-        # Web-Ordner löschen, damit copy_directory immer alles neu kopiert
-        COMMAND ${CMAKE_COMMAND} -E remove_directory
-            "${XPLANE_PLUGIN_DIR}/web"
-
-        # Web-Ordner neu kopieren
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/web"
             "${XPLANE_PLUGIN_DIR}/web"
