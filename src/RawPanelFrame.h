@@ -9,14 +9,11 @@
 #include <cstdint>
 #include <vector>
 
-/**
- * @brief Raw framebuffer data for a single captured panel region.
- *
- * The pixel buffer contains uncompressed RGBA8 data in row‑major order.
- */
 struct RawPanelFrame {
 	uint16_t panelID;
 	int width;
 	int height;
-	std::vector<char> pixels;
+
+	// RGBA8, row-major, 4 bytes per pixel
+	std::vector<uint8_t> pixels;
 };

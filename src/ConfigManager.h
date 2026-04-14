@@ -34,7 +34,7 @@ class ConfigManager {
 
 	TransportMode transportMode() const {
 		// TODO: aus config.json lesen
-		return TransportMode::WebSocket;
+		return TransportMode::Udp;
 	}
 
 	std::string httpUrl() const {

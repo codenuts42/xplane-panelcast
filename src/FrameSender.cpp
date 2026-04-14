@@ -10,7 +10,9 @@
 
 #include "FrameSender.h"
 #include "PanelFrameHeader.h"
+#include "Rgb565Converter.h"
 #include <chrono>
+#include <immintrin.h>
 #include <lz4.h>
 
 FrameSender::FrameSender(FrameTransport& transport) : transport_(transport) {
@@ -64,16 +66,24 @@ void FrameSender::workerLoop() {
  * UDP packets by UdpSender.
  */
 void FrameSender::compressAndSendPanel(const RawPanelFrame& f) {
-	int rawSize = f.width * f.height * 4;
+	const int pixelCount = f.width * f.height;
 
-	int maxComp = LZ4_compressBound(rawSize);
+	std::vector<uint16_t> rgb565(pixelCount);
+	Rgb565Converter::rgba8_to_rgb565(f.pixels.data(), rgb565.data(), pixelCount);
+
+	const int rawSize = pixelCount * static_cast<int>(sizeof(uint16_t));
+
+	const int maxComp = LZ4_compressBound(rawSize);
+	if (maxComp <= 0) return;
 	std::vector<char> comp(maxComp);
-	int compSize = LZ4_compress_fast(f.pixels.data(), comp.data(), rawSize, maxComp, 8);
-	if (compSize <= 0) return;
+
+	const int compSize =
+	    LZ4_compress_fast(reinterpret_cast<const char*>(rgb565.data()), comp.data(), rawSize, maxComp, 8);
+	if (compSize <= 0 || compSize > maxComp) return;
 	comp.resize(compSize);
 
 	uint32_t& counter = frameCounters_[f.panelID];
-	uint32_t frameID = counter++;
+	const uint32_t frameID = counter++;
 
 	transport_.sendFrame(f.panelID, frameID, comp.data(), compSize, f.width, f.height);
 }
