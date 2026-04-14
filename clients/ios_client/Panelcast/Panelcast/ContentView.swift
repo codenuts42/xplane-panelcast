@@ -19,13 +19,16 @@ struct ContentView: View {
                 Color.black.ignoresSafeArea()
 
                 if store.panels.isEmpty {
-                    VStack(spacing: 8) {
-                        Text("Waiting for panels…")
-                            .foregroundColor(Color(white: 0.85))
-                            .font(.title2)
-                        Text("Your IP: \(store.localIP)")
-                            .font(.subheadline)
-                            .foregroundColor(Color(white: 0.75))
+                    VStack(spacing: 36) {
+                        Image("Logo").cornerRadius(16)
+                        VStack(spacing: 8) {
+                            Text("Waiting for panels…")
+                                .foregroundColor(Color(white: 0.85))
+                                .font(.title2)
+                            Text("\(store.localIP):\(String(store.udpPort))")
+                                .font(.footnote)
+                                .foregroundColor(Color(white: 0.75))
+                        }
                     }
                 } else {
                     let availableWidth = geo.size.width - 32

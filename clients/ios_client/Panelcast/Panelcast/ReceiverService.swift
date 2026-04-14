@@ -21,7 +21,7 @@ final class ReceiverService {
     ///
     /// - Parameter store: The central PanelStore that receives decoded UIImages.
     init(store: PanelStore) {
-        receiver = UDPReceiver(port: 5000)
+        receiver = UDPReceiver(port: store.udpPort)
 
         receiver.onPacket = { [weak self] data in
             guard let self else { return }

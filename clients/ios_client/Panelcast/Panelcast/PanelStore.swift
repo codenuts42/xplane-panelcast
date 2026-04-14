@@ -9,16 +9,17 @@ import Combine
 import SwiftUI
 
 final class PanelStore: ObservableObject {
-    @Published var localIP: String = "unknown"
+    @Published var localIP: String
+    @Published var udpPort: UInt16 = 5000
     @Published var panels: [UInt16: PanelModel] = [:]
 
     private var timer: Timer?
 
     init() {
+        localIP = getWiFiIPAddress() ?? "0.0.0.0"
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             self.cleanupTimedOutPanels()
         }
-        localIP = getWiFiIPAddress() ?? "unknown"
     }
 
     func receiveFrame(panelID: UInt16, image: CGImage) {
