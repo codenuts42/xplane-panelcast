@@ -31,8 +31,10 @@ final class ReceiverService {
 
                 // 1) LZ4 → RGB565
                 let expectedSize = frame.width * frame.height * 2
-                guard let rgb565 = LZ4Swift.decompress(frame.compressed,
-                                                       originalSize: expectedSize)
+                guard let rgb565 = LZ4Swift.decompress(
+                    frame.compressed,
+                    originalSize: expectedSize
+                )
                 else { return }
 
                 // 2) GPU → RGBA8
