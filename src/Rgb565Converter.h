@@ -81,7 +81,13 @@ class Rgb565Converter {
 			rgba8_to_rgb565_8px(srcRGBA + ((i + 8) * 4), dst565 + (i + 8));
 		}
 
-		// Rest (0–15 Pixel)
+		// Wenn noch >= 8 Pixel übrig sind:
+		if (pixelCount - i >= 8) {
+			rgba8_to_rgb565_8px(srcRGBA + (i * 4), dst565 + i);
+			i += 8;
+		}
+
+		// Rest scalar
 		rgba8_to_rgb565_scalar(srcRGBA + i * 4, dst565 + i, pixelCount - i);
 	}
 #endif
