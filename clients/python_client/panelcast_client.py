@@ -1,14 +1,5 @@
 """
-Multi-Panel UDP Client (Threaded + Panel Removal Detection)
------------------------------------------------------------
-
-Thread 1: UDP-Receiver (Reassembly)
-Thread 2 (Main): Dekompression + Anzeige + Panel-Cleanup
-
-Ein Panel-Fenster wird automatisch geschlossen, wenn das Panel
-in der Sender-Konfiguration entfernt wurde (d.h. keine Frames
-mehr für dieses Panel eintreffen).
-
+Multi‑Panel UDP Client (Threaded + Panel Removal Detection)
 (c) 2025 Peter Vorwieger — All rights reserved.
 """
 
@@ -41,16 +32,17 @@ sock.bind(("0.0.0.0", 5000))
 sock.setblocking(True)
 
 # ---------------------------------------------------------------------------
-# Panel‑State (geschützt durch Lock)
+# Panel‑State
 # ---------------------------------------------------------------------------
 
 panels = {}          # panelID -> state
-ready_frames = {}    # panelID -> compressed bytes
+ready_frames = {}    # panelID -> compressed frame
+last_time = {}       # panelID -> last display timestamp
 state_lock = threading.Lock()
-last_time = {}       # panelID -> last display time
 
 
 def init_panel(panelID):
+    """Initialisiert Panel‑State."""
     panels[panelID] = {
         "frameID": None,
         "fragCount": 0,
@@ -69,11 +61,12 @@ def init_panel(panelID):
 # ---------------------------------------------------------------------------
 
 def handle_fragment(data):
+    """Verarbeitet ein UDP‑Fragment und führt Reassembly durch."""
     if len(data) < HEADER_SIZE:
         return
 
     hdr = struct.unpack(HDR_FORMAT, data[:HEADER_SIZE])
-    magic, frameID, panelID, width, height, compSize, fragIndex, fragCount, payloadSize  = hdr
+    magic, frameID, panelID, width, height, compSize, fragIndex, fragCount, payloadSize = hdr
 
     if magic != MAGIC:
         return
@@ -95,10 +88,12 @@ def handle_fragment(data):
             p["compSize"] = compSize
             p["frags"] = {}
 
+        # Fragment speichern
         payload = data[HEADER_SIZE:HEADER_SIZE + payloadSize]
         p["frags"][fragIndex] = payload
         p["received"] = len(p["frags"])
 
+        # Frame vollständig?
         if p["received"] == p["fragCount"]:
             compressed = b"".join(p["frags"][i] for i in range(p["fragCount"]))
             ready_frames[panelID] = {
@@ -109,16 +104,18 @@ def handle_fragment(data):
 
 
 def receiver_loop():
+    """Thread: empfängt UDP‑Pakete."""
     while True:
-        data, addr = sock.recvfrom(65535)
+        data, _ = sock.recvfrom(65535)
         handle_fragment(data)
 
 
 # ---------------------------------------------------------------------------
-# Panel‑Cleanup (Fenster schließen, wenn Panel entfernt wurde)
+# Panel‑Cleanup
 # ---------------------------------------------------------------------------
 
 def cleanup_removed_panels(timeout=1.0):
+    """Schließt Fenster, wenn Panels verschwunden sind."""
     now = time.time()
     to_remove = []
 
@@ -130,12 +127,10 @@ def cleanup_removed_panels(timeout=1.0):
         for panelID in to_remove:
             print(f"Panel {panelID} removed — closing window")
 
-            # State löschen
             del panels[panelID]
             ready_frames.pop(panelID, None)
             last_time.pop(panelID, None)
 
-            # Fenster schließen
             cv2.destroyWindow(f"Panel {panelID}")
 
 
@@ -143,43 +138,40 @@ def cleanup_removed_panels(timeout=1.0):
 # Anzeige im Main‑Thread
 # ---------------------------------------------------------------------------
 
+def display_frame(panelID, compressed, width, height):
+    """Dekomprimiert und zeigt ein Panel‑Frame an."""
+    raw = lz4.block.decompress(compressed, uncompressed_size=width * height * 2)
+    img = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 2))
+    img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR5652BGR)
+    flipped = cv2.flip(img_bgr, 0)
+
+    # FPS berechnen
+    now = time.time()
+    fps = 1.0 / (now - last_time[panelID])
+    last_time[panelID] = now
+
+    winname = f"Panel {panelID}"
+    title = f"Panel {panelID} - {width}x{height} - {fps:.0f} FPS"
+
+    cv2.namedWindow(winname, cv2.WINDOW_AUTOSIZE)
+    cv2.setWindowTitle(winname, title)
+    cv2.imshow(winname, flipped)
+
+
 def main_loop():
     print("Threaded Multi‑Panel Client running…")
 
     while True:
-        # Panels entfernen, die verschwunden sind
         cleanup_removed_panels()
 
-        # Kopie der fertigen Frames ziehen
+        # fertige Frames holen
         with state_lock:
             frames = dict(ready_frames)
             ready_frames.clear()
 
-        # Pro Panel höchstens ein Frame verarbeiten
+        # pro Panel ein Frame anzeigen
         for panelID, info in frames.items():
-            compressed = info["compressed"]
-            width = info["width"]
-            height = info["height"]
-
-            raw = lz4.block.decompress(
-                compressed,
-                uncompressed_size=width * height * 2
-            )
-
-            img = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 2))
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR5652BGR)
-            flipped = cv2.flip(img_bgr, 0)
-
-            now = time.time()
-            fps = 1.0 / (now - last_time[panelID])
-            last_time[panelID] = now
-
-            winname = f"Panel {panelID}"
-            title = f"Panel {panelID} - {width}x{height} - {fps:.0f} FPS"
-
-            cv2.namedWindow(winname, cv2.WINDOW_AUTOSIZE)
-            cv2.setWindowTitle(winname, title)
-            cv2.imshow(winname, flipped)
+            display_frame(panelID, info["compressed"], info["width"], info["height"])
 
         cv2.waitKey(1)
 
