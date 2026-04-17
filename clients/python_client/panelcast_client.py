@@ -160,11 +160,11 @@ def main_loop():
 
             raw = lz4.block.decompress(
                 compressed,
-                uncompressed_size=width * height * 4
+                uncompressed_size=width * height * 2
             )
 
-            img = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 4))
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGBA2BGR)
+            img = np.frombuffer(raw, dtype=np.uint8).reshape((height, width, 2))
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_BGR5652BGR)
             flipped = cv2.flip(img_bgr, 0)
 
             now = time.time()
