@@ -21,6 +21,9 @@ import cv2
 import lz4.block
 import numpy as np
 
+import ctypes
+ctypes.windll.user32.SetProcessDPIAware()
+
 # ---------------------------------------------------------------------------
 # Protokoll / Header
 # ---------------------------------------------------------------------------
